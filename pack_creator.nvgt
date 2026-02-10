@@ -1,0 +1,146 @@
+#include "form.nvgt"
+
+int ask_yes_no(string title, string text) {
+	audio_form f;
+	f.create_window(title, false);
+	f.create_input_box("Message", text, "", 0, true, true);
+	int yes_btn = f.create_button("Yes", true);
+	int no_btn = f.create_button("No", false, true);
+	f.focus(yes_btn);
+	while (true) {
+		wait(5);
+		f.monitor();
+		if (f.is_pressed(yes_btn)) return 1;
+		if (f.is_pressed(no_btn)) return 2;
+	}
+	return 2;
+}
+
+class PackCreator {
+	pack_file pfile;
+	string filename;
+	string source_folder;
+	string[] files_to_pack;
+	bool silent = false;
+	PackCreator() {
+		if (COMMAND_LINE.find_first("/s") != -1) silent = true;
+	}
+	void run() {
+		if (!silent) show_window("NVGT Pack Creator");
+		if (file_exists("pack.pk")) {
+			if (silent || ask_yes_no("Saved Data", "Would you like to use the existing saved data from pack.pk?") == 1) {
+				load_saved_data();
+			} else if (!silent) {
+				get_user_input();
+			}
+		} else if (!silent) {
+			get_user_input();
+		} else {
+			exit();
+		}
+		if (filename.empty() || source_folder.empty()) {
+			if (!silent) alert("Error", "Missing configuration!");
+			return;
+		}
+		if (!directory_exists(source_folder)) {
+			if (!silent) alert("Error", "Source folder does not exist: " + source_folder);
+			return;
+		}
+		if (!silent) speak("Scanning folder...");
+		files_to_pack.resize(0);
+		find_files_recursive(source_folder);
+		if (files_to_pack.length() == 0) {
+			if (!silent) alert("Error", "No files found in source folder.");
+			return;
+		}
+		if (!silent) {
+			if (ask_yes_no("Start Packing", "Found " + files_to_pack.length() + " files. Start packing into " + filename + "?") != 1) {
+				return;
+			}
+		}
+		if (!pfile.create(filename)) {
+			if (!silent) alert("Error", "Failed to create pack file: " + filename);
+			return;
+		}
+		for (uint i = 0; i < files_to_pack.length(); i++) {
+			string disk_path = files_to_pack[i];
+			string relative_path = disk_path;
+			string norm_src = source_folder.replace("\\", "/");
+			if (norm_src.ends_with("/")) norm_src.erase(norm_src.length() - 1);
+			relative_path = relative_path.replace("\\", "/");
+			relative_path = relative_path.replace(norm_src + "/", "");
+			if (!pfile.add_file(disk_path, relative_path)) {
+				if (!silent) alert("Warning", "Failed to add file: " + relative_path);
+			}
+			if (i % 10 == 0) {
+				wait(1);
+				if (i % 50 == 0 && !silent) {
+					speak("Packed " + (i + 1) + " of " + files_to_pack.length());
+				}
+			}
+		}
+		pfile.close();
+		if (!silent) alert("Success", "Pack created successfully with " + files_to_pack.length() + " files.");
+	}
+	void get_user_input() {
+		audio_form f;
+		f.create_window("Pack Creator Configuration", false);
+		int fn_input = f.create_input_box("Output Pack Filename", filename.empty() ? "sounds.dat" : filename);
+		int src_input = f.create_input_box("Source Folder Path", source_folder.empty() ? "sounds" : source_folder);
+		int ok_btn = f.create_button("Create Pack", true);
+		int cancel_btn = f.create_button("Cancel", false, true);
+		f.focus(fn_input);
+		while (true) {
+			wait(5);
+			f.monitor();
+			if (f.is_pressed(ok_btn)) {
+				filename = f.get_text(fn_input);
+				source_folder = f.get_text(src_input);
+				if (filename.empty() || source_folder.empty()) {
+					alert("Error", "Please fill in all fields.");
+					continue;
+				}
+				save_data();
+				break;
+			}
+			if (f.is_pressed(cancel_btn)) exit();
+		}
+	}
+	void load_saved_data() {
+		file f;
+		if (f.open("pack.pk", "rb")) {
+			string content = f.read();
+			f.close();
+			string[]@ parts = content.split("{:}", true);
+			if (parts.length() >= 2) {
+				filename = parts[0];
+				source_folder = parts[1];
+			}
+		}
+	}
+	void save_data() {
+		file f;
+		if (f.open("pack.pk", "wb")) {
+			f.write(filename + "{:}" + source_folder);
+			f.close();
+		}
+	}
+	void find_files_recursive(string path) {
+		string[] files = find_files(path + "/*.*");
+		for (uint i = 0; i < files.length(); i++) {
+			files_to_pack.insert_last(path + "/" + files[i]);
+		}
+		string[] dirs = find_directories(path + "/*");
+		for (uint i = 0; i < dirs.length(); i++) {
+			string d = dirs[i];
+			if (d == "." || d == "..") continue;
+			find_files_recursive(path + "/" + d);
+		}
+	}
+}
+
+void main() {
+	PackCreator creator;
+	creator.run();
+	exit();
+}

@@ -1,0 +1,8 @@
+[Setup]
+Lang=default
+Dir=c:\nvgt
+Group=NVGT
+NoIcons=0
+SetupType=custom
+Components=core,includes,plugins,plugins\curl,plugins\git,plugins\sqlite,plugins\systemd_notify,stubs,stubs\windows,stubs\macos,stubs\linux,stubs\android,androidtools,docs,associate,associate\run,path
+Tasks=

@@ -1,0 +1,11 @@
+GEMINI.md
+docs/
+# Build artifacts
+*.apk
+*.zip
+*.exe
+nvgt/
+nvgt_setup.exe
+pack.pk
+
+github_token.txt

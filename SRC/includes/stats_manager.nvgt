@@ -1,0 +1,118 @@
+#include "form.nvgt"
+#include "graphics_manager.nvgt"
+
+class stats_manager {
+	uint total_games_played = 0;
+	int64 total_earnings = 0;
+	int64 highest_prize = 0;
+	uint total_correct_answers = 0;
+	uint blitz_games_played = 0;
+	uint blitz_total_correct = 0;
+	uint blitz_highest_score = 0;
+	uint lifelines_used = 0;
+	string stats_file;
+	stats_manager() {
+		stats_file = get_preferences_path("Boostof Studios", "Quizzy") + "/statistics.json";
+		load();
+	}
+	void load() {
+		if (!file_exists(stats_file)) return;
+		string content = file_get_contents(stats_file);
+		json_object@ root = parse_json(content);
+		if (@root == null) return;
+		if (root.exists("total_games_played")) total_games_played = uint(root["total_games_played"]);
+		if (root.exists("total_earnings")) total_earnings = int64(root["total_earnings"]);
+		if (root.exists("highest_prize")) highest_prize = int64(root["highest_prize"]);
+		if (root.exists("total_correct_answers")) total_correct_answers = uint(root["total_correct_answers"]);
+		if (root.exists("blitz_games_played")) blitz_games_played = uint(root["blitz_games_played"]);
+		if (root.exists("blitz_total_correct")) blitz_total_correct = uint(root["blitz_total_correct"]);
+		if (root.exists("blitz_highest_score")) blitz_highest_score = uint(root["blitz_highest_score"]);
+		if (root.exists("lifelines_used")) lifelines_used = uint(root["lifelines_used"]);
+	}
+	void save() {
+		json_object@ root = json_object();
+		root.set("total_games_played", total_games_played);
+		root.set("total_earnings", total_earnings);
+		root.set("highest_prize", highest_prize);
+		root.set("total_correct_answers", total_correct_answers);
+		root.set("blitz_games_played", blitz_games_played);
+		root.set("blitz_total_correct", blitz_total_correct);
+		root.set("blitz_highest_score", blitz_highest_score);
+		root.set("lifelines_used", lifelines_used);
+		file_put_contents(stats_file, root.stringify(4));
+	}
+	void record_game(int prize, int bonus, int correct_count, int used_lifelines) {
+		total_games_played++;
+		int total = prize + bonus;
+		total_earnings += total;
+		if (total > highest_prize) highest_prize = total;
+		total_correct_answers += correct_count;
+		lifelines_used += used_lifelines;
+		save();
+	}
+	void record_blitz(int correct_count) {
+		blitz_games_played++;
+		blitz_total_correct += correct_count;
+		if (uint(correct_count) > blitz_highest_score) blitz_highest_score = correct_count;
+		save();
+	}
+	void show_stats_menu() {
+		audio_form f;
+		f.create_window("Statistics", false);
+		string stats_text = "GENERAL STATISTICS\n" +
+			"Total Games Played: " + total_games_played + "\n" +
+			"Total Earnings: ₹" + format_currency(total_earnings) + "\n" +
+			"Highest Single Prize: ₹" + format_currency(highest_prize) + "\n" +
+			"Total Correct Answers: " + total_correct_answers + "\n" +
+			"Total Lifelines Used: " + lifelines_used + "\n\n" +
+			"BLITZ MODE STATISTICS\n" +
+			"Blitz Games Played: " + blitz_games_played + "\n" +
+			"Total Blitz Correct: " + blitz_total_correct + "\n" +
+			"Highest Blitz Score: " + blitz_highest_score;
+		f.create_input_box("Player Statistics", stats_text, "", 0, true, true);
+		int btn_reset = f.create_button("Reset Statistics");
+		int btn_back = f.create_button("Back", true, true);
+		f.focus(btn_back);
+		while (true) {
+			wait(5);
+			app.touch.monitor();
+			gm.prepare_frame();
+			gm.draw_form(f);
+			gm.present_frame();
+			f.monitor();
+			if (f.is_pressed(btn_reset)) {
+				if (ask_yes_no("Quizzy", "Are you sure you want to reset all statistics? This cannot be undone.") == 1) {
+					reset_all();
+					speak("Statistics reset.", false);
+					break;
+				}
+			}
+			if (f.is_pressed(btn_back)) break;
+		}
+	}
+	void reset_all() {
+		total_games_played = 0;
+		total_earnings = 0;
+		highest_prize = 0;
+		total_correct_answers = 0;
+		blitz_games_played = 0;
+		blitz_total_correct = 0;
+		blitz_highest_score = 0;
+		lifelines_used = 0;
+		save();
+	}
+	string format_currency(int64 amount) {
+		string s = "" + amount;
+		if (s.length() <= 3) return s;
+		string res = s.substr(s.length() - 3);
+		s = s.substr(0, s.length() - 3);
+		while (s.length() > 2) {
+			res = s.substr(s.length() - 2) + "," + res;
+			s = s.substr(0, s.length() - 2);
+		}
+		if (s.length() > 0) res = s + "," + res;
+		return res;
+	}
+}
+
+stats_manager stats;

@@ -1,0 +1,113 @@
+name: NVGT Build and Release
+on:
+  push:
+    tags:
+      - '[0-9]*'
+      - 'v[0-9]*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build and Publish
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+
+      - name: Download NVGT
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/samtupy/nvgt/releases/download/latest/nvgt_0.90.0_dev.exe" -OutFile "nvgt_installer.exe"
+          Start-Process -FilePath ".\nvgt_installer.exe" -ArgumentList '/SP- /SILENT /LOADINF="settings.dat"' -Wait
+
+      - name: Copy lib files to NVGT
+        run: Copy-Item -Path "lib\*" -Destination "c:\nvgt\lib" -Recurse -Force
+
+      - name: Extract Release Notes
+        uses: actions/github-script@v7
+        id: extract_notes
+        with:
+          script: |
+            const fs = require('fs');
+            const changelogPath = 'changelog.md';
+            
+            try {
+              if (!fs.existsSync(changelogPath)) {
+                console.log('changelog.md not found, using default notes.');
+                return "Release " + context.ref.replace('refs/tags/', '');
+              }
+              
+              const content = fs.readFileSync(changelogPath, 'utf8');
+              const rawTag = context.ref.replace('refs/tags/', '');
+              const cleanVer = rawTag.replace(/^v/, '');
+              
+              console.log(`Target Version: ${cleanVer}`);
+              
+              const versionRegex = new RegExp(`^##.*${cleanVer.replace(/\./g, '\\.')}.*`, 'i');
+              
+              const lines = content.split(/\r?\n/);
+              let capturing = false;
+              let notes = [];
+              
+              for (const line of lines) {
+                if (!capturing) {
+                  if (versionRegex.test(line)) {
+                    capturing = true;
+                    console.log(`Found header: ${line}`);
+                  }
+                  continue;
+                }
+                
+                if (capturing) {
+                  if (/^##\s/.test(line)) {
+                    break;
+                  }
+                  notes.push(line);
+                }
+              }
+              
+              const finalNotes = notes.join('\n').trim();
+              
+              if (finalNotes.length > 0) {
+                fs.writeFileSync('release_notes.txt', finalNotes);
+                console.log('Successfully extracted notes.');
+              } else {
+                console.log('Found header but no content, or header not found.');
+                fs.writeFileSync('release_notes.txt', `Release ${cleanVer}`);
+              }
+              
+            } catch (error) {
+              console.error(error);
+              fs.writeFileSync('release_notes.txt', "Release " + context.ref.replace('refs/tags/', ''));
+            }
+
+      - name: Update Version in Config
+        run: |
+          $ver = (Select-String -Path "SRC\quizzy.nvgt" -Pattern 'GAME_VERSION = "(.*?)"').Matches.Groups[1].Value
+          $content = Get-Content -Path "SRC\.nvgtrc"
+          $content = $content -replace "\[build\]", "[build]`nproduct_version = $ver`nproduct_version_semantic = $ver"
+          Set-Content -Path "SRC\.nvgtrc" -Value $content
+
+      - name: Build Pack
+        run: C:\nvgt\nvgt.exe -Q pack_creator.nvgt /s && Move-Item sounds.dat SRC/sounds.dat -Force
+
+      - name: Build Windows
+        run: cd src;C:\nvgt\nvgt.exe quizzy.nvgt -c
+
+      - name: Build Android
+        run: cd src;C:\nvgt\nvgt.exe quizzy.nvgt --compile-debug --platform=android
+
+      - name: Build Windows Installer
+        run: iscc setup.iss /DAppVersion=${{ github.ref_name }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ github.ref_name }}
+          body_path: release_notes.txt
+          make_latest: true
+          files: |
+            Quizzy.zip
+            Quizzy.apk
+            Quizzy_Setup.exe

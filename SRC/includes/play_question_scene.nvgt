@@ -1,0 +1,224 @@
+class PlayQuestionScene {
+	QuizSession session;
+	audio_form f;
+	int[] option_buttons;
+	Question@ q;
+	int question_index;
+	int current_selection;
+	int loop_result = -1;
+	int btn_5050 = -1;
+	int btn_phone = -1;
+	int btn_audience = -1;
+	int btn_double = -1;
+	int btn_expert = -1;
+	int quit_btn = -1;
+	int q_field = -1;
+	int last_focus = -1;
+	void init(Question@ q, int question_index) {
+		exit_game_flag = false;
+		@this.q = q;
+		this.question_index = question_index;
+		session.start_question(q, question_index);
+		safe_stop(app.bg_music);
+		if (question_index < 10) {
+			load_sound(app.bg_music, "clock-sound.mp3");
+			app.bg_music.volume = 0; 
+		} else {
+			load_sound(app.bg_music, "gameMusic.mp3");
+			app.bg_music.volume = 0; 
+		}
+		app.bg_music.play_looped();
+		f.create_window("Quizzy", false);
+		q_field = f.create_input_box("Question", q.question, "", 0, true, true);
+		int progress_list = f.create_list("Prize Progress");
+		for (uint i = 0; i < prizes.length(); i++) {
+			string status = "";
+			if (int(i) < question_index) status = " - Completed";
+			else if (int(i) == question_index) status = " - Current";
+			f.add_list_item(progress_list, "Question " + (i + 1) + status + " for ₹" + prizes[i]);
+		}
+		f.set_list_position(progress_list, question_index);
+		for (uint i = 0; i < q.options.length(); i++) {
+			string prefix = "";
+			if (i == 0) prefix = "a: ";
+			else if (i == 1) prefix = "b: ";
+			else if (i == 2) prefix = "c: ";
+			else if (i == 3) prefix = "d: ";
+			option_buttons.insert_last(f.create_button(prefix + q.options[i]));
+		}
+		if (state.lifeline_5050) btn_5050 = f.create_button("Lifeline: 50-50");
+		if (state.lifeline_phone) btn_phone = f.create_button("Lifeline: Phone a Friend");
+		if (state.lifeline_audience) btn_audience = f.create_button("Lifeline: Ask the Audience");
+		if (state.lifeline_double_dip) btn_double = f.create_button("Lifeline: Double Dip");
+		if (state.lifeline_expert) btn_expert = f.create_button("Lifeline: Ask an Expert");
+		quit_btn = f.create_button("Quit Game", false, true);
+		f.focus(q_field);
+		int master_vol = int(app.config.read_number("master_volume", 100));
+		set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+		app.input.register_local(KEY_A, KeyEventHandler(this.on_key_A));
+		app.input.register_local(KEY_B, KeyEventHandler(this.on_key_B));
+		app.input.register_local(KEY_C, KeyEventHandler(this.on_key_C));
+		app.input.register_local(KEY_D, KeyEventHandler(this.on_key_D));
+		app.input.register_local(KEY_L, KeyEventHandler(this.on_key_L));
+		app.input.register_local(KEY_S, KeyEventHandler(this.on_key_S));
+		app.input.register_local(KEY_F5, KeyEventHandler(this.on_key_F5));
+	}
+	void on_key_A() {
+		if (option_buttons.length() > 0) {
+			f.focus(option_buttons[0]);
+			if (handle_option_selection(session, 0, option_buttons, current_selection)) {
+				loop_result = 1;
+			} else if (exit_game_flag) {
+				loop_result = 0;
+			}
+		}
+	}
+	void on_key_B() {
+		if (option_buttons.length() > 1) {
+			f.focus(option_buttons[1]);
+			if (handle_option_selection(session, 1, option_buttons, current_selection)) {
+				loop_result = 1;
+			} else if (exit_game_flag) {
+				loop_result = 0;
+			}
+		}
+	}
+	void on_key_C() {
+		if (option_buttons.length() > 2) {
+			f.focus(option_buttons[2]);
+			if (handle_option_selection(session, 2, option_buttons, current_selection)) {
+				loop_result = 1;
+			} else if (exit_game_flag) {
+				loop_result = 0;
+			}
+		}
+	}
+	void on_key_D() {
+		if (option_buttons.length() > 3) {
+			f.focus(option_buttons[3]);
+			if (handle_option_selection(session, 3, option_buttons, current_selection)) {
+				loop_result = 1;
+			} else if (exit_game_flag) {
+				loop_result = 0;
+			}
+		}
+	}
+	void on_key_L() {
+		string ladder = "Prize Ladder: ";
+		for (int j = int(prizes.length()) - 1; j >= 0; j--) {
+			string marker = "";
+			if (j == 4 || j == 9 || j == 15) marker = " - Milestone";
+			if (j == question_index) marker = " - CURRENT";
+			ladder += "Question " + (j + 1) + ": ₹" + prizes[j] + marker + ". ";
+		}
+		speak(ladder, false);
+	}
+	void on_key_S() {
+		int lifelines_left = 0;
+		if (state.lifeline_5050) lifelines_left++;
+		if (state.lifeline_phone) lifelines_left++;
+		if (state.lifeline_audience) lifelines_left++;
+		if (state.lifeline_double_dip) lifelines_left++;
+		if (state.lifeline_expert) lifelines_left++;
+		string current_prize = (question_index > 0) ? prizes[question_index - 1] : "0";
+		string status = "Current Prize: ₹" + current_prize + ". Questions remaining: " + (questions.length() - question_index) + ". Lifelines left: " + lifelines_left + ".";
+		speak(status, false);
+	}
+	void on_key_F5() {
+		if (!state.blitz_played) {
+			blitz_round();
+			f.focus(q_field); 
+		}
+	}
+	bool run() {
+		loop_result = -1;
+		while (true) {
+			if (loop_result != -1) break;
+			wait(5);
+			app.touch.monitor();
+			f.monitor();
+			gm.prepare_frame();
+			current_selection = -1;
+			int current_focus = f.get_current_focus();
+			for (uint i = 0; i < option_buttons.length(); i++) {
+				if (current_focus == option_buttons[i]) {
+					current_selection = i;
+					break;
+				}
+			}
+			gm.draw_question(q.question, q.options, current_selection);
+			gm.draw_prize_ladder(question_index, prizes);
+			gm.present_frame();
+			app.input.monitor();
+			if (loop_result != -1) break;
+			if (session.check_time_limit()) {
+				safe_stop(app.bg_music);
+				play_sfx("Kbc Galat Jawab.mp3", true); 
+				alert("Time Up", "You ran out of time! The correct answer was: " + q.options[q.correct_index]);
+				loop_result = 0;
+				break;
+			}
+			for (uint i = 0; i < option_buttons.length(); i++) {
+				if (f.is_pressed(option_buttons[i])) {
+					if (handle_option_selection(session, i, option_buttons, current_selection)) {
+						loop_result = 1;
+						break;
+					}
+					if (exit_game_flag) {
+						loop_result = 0;
+						break;
+					}
+					continue;
+				}
+			}
+			if (loop_result != -1) break;
+			if (btn_5050 != -1 && f.is_pressed(btn_5050)) {
+				int[] removed = session.use_5050();
+				f.set_state(btn_5050, false, false);
+				for (uint i = 0; i < removed.length(); i++) {
+					f.set_state(option_buttons[removed[i]], false, true);
+				}
+				alert("50-50", "Two incorrect options have been removed.");
+			}
+			if (btn_phone != -1 && f.is_pressed(btn_phone)) {
+				string answer = session.use_phone_a_friend();
+				f.set_state(btn_phone, false, false);
+				safe_stop(app.bg_music);
+				session.pause_timer();
+				play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
+				alert("Phone a Friend", "Your friend thinks the answer is: " + answer);
+				app.bg_music.play_looped();
+				session.resume_timer();
+			}
+			if (btn_audience != -1 && f.is_pressed(btn_audience)) {
+				session.use_ask_the_audience();
+				f.set_state(btn_audience, false, false);
+				safe_stop(app.bg_music);
+				session.pause_timer();
+				play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
+				show_audience_poll(q);
+				app.bg_music.play_looped();
+				session.resume_timer();
+			}
+			if (btn_double != -1 && f.is_pressed(btn_double)) {
+				session.use_double_dip();
+				f.set_state(btn_double, false, false);
+				alert("Double Dip", "Double Dip active! You can now make two guesses for this question.");
+			}
+			if (btn_expert != -1 && f.is_pressed(btn_expert)) {
+				string answer = session.use_ask_an_expert();
+				f.set_state(btn_expert, false, false);
+				alert("Ask an Expert", "The expert says the correct answer is definitely: " + answer);
+			}
+			if (f.is_pressed(quit_btn)) {
+				play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);
+				safe_stop(app.bg_music);
+				loop_result = 0;
+				break;
+			}
+		}
+		app.input.clear_local();
+		safe_stop(app.bg_music);
+		return loop_result == 1;
+	}
+}

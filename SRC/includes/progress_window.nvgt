@@ -1,0 +1,46 @@
+#include "form.nvgt"
+#include "graphics_manager.nvgt"
+
+class progress_window {
+	audio_form f;
+	int pb = -1;
+	int lbl = -1;
+	string title;
+	string action;
+	int last_spoken_percentage = 0;
+	progress_window(string title, string action) {
+		this.title = title;
+		this.action = action;
+		f.create_window(title, false, true);
+		lbl = f.create_input_box(action, "", "", 0, true, false);
+		pb = f.create_progress_bar("Progress", 1, true);
+		f.focus(lbl);
+	}
+	void update(int percentage, string new_action = "") {
+		if (new_action != "") {
+			this.action = new_action;
+			f.set_caption(lbl, new_action);
+		}
+		f.set_progress(pb, percentage);
+		if (percentage >= last_spoken_percentage + 5) {
+			int spoken_val = percentage - (percentage % 5);
+			if (spoken_val > last_spoken_percentage) {
+				speak(spoken_val + "%", false);
+				last_spoken_percentage = spoken_val;
+			}
+		}
+		show();
+	}
+	void show() {
+		wait(5);
+		app.touch.monitor();
+		f.monitor();
+		if (gm.initialized) {
+			gm.prepare_frame();
+			gm.draw_form(f);
+			gm.present_frame();
+		}
+	}
+	void close() {
+	}
+}

@@ -1,0 +1,276 @@
+#include "form.nvgt"
+#include "game_data.nvgt"
+#include "graphics_manager.nvgt"
+
+string get_custom_questions_path() {
+	string path = get_preferences_path("Boostof Studios", "Quizzy");
+	if (!path.ends_with("/") && !path.ends_with("\\")) path += "/";
+	path += "custom_questions/";
+	if (!directory_exists(path)) {
+		directory_create(path);
+	}
+	return path;
+}
+
+bool load_custom_questions(string filename) {
+	if (filename == "") return false;
+	string content = file_get_contents(filename);
+	if (content == "") {
+		alert("Quizzy", "Could not read the file: " + filename);
+		return false;
+	}
+	var@ v = parse_json(content);
+	if (@v == null) {
+		alert("Quizzy", "Invalid JSON format in " + filename);
+		return false;
+	}
+	json_array@ arr = null;
+	json_object@ root_obj = cast<json_object>(v);
+	if (@root_obj != null) {
+		if (root_obj.exists("questions") && root_obj.is_array("questions")) {
+			@arr = root_obj.get_array("questions");
+		} else {
+			alert("Quizzy", "No 'questions' array found in the pack object.");
+			return false;
+		}
+	} else {
+		@arr = cast<json_array>(v);
+	}
+	if (@arr == null) {
+		alert("Quizzy", "No valid question array found in " + filename);
+		return false;
+	}
+	questions.resize(0);
+	for (uint i = 0; i < arr.size(); i++) {
+		if (questions.length() >= 16) break;
+		if (arr.is_object(i)) {
+			json_object@ obj = arr.get_object(i);
+			if (@obj == null) continue;
+			string q_text = "No question text";
+			if (obj.exists("question")) q_text = string(obj["question"]);
+			else if (obj.exists("text")) q_text = string(obj["text"]);
+			json_array@ opt_arr = obj.get_array("options");
+			if (@opt_arr == null || opt_arr.size() == 0) continue;
+			int correct_idx = 0;
+			if (obj.exists("correct_index")) correct_idx = int(obj["correct_index"]);
+			string[] options;
+			for (uint j = 0; j < opt_arr.size(); j++) {
+				options.insert_last(string(opt_arr[j]));
+			}
+			if (correct_idx < 0 || correct_idx >= int(options.length())) {
+				correct_idx = 0;
+			}
+			questions.insert_last(Question(q_text, options, correct_idx));
+		}
+	}
+	if (questions.length() == 0) {
+		alert("Quizzy", "No valid questions found in the pack.");
+		return false;
+	}
+	return true;
+}
+
+void create_custom_pack_form(string filename = "") {
+	string pack_name = "Unnamed Pack";
+	json_object@ root = json_object();
+	json_array@ questions_arr = null;
+	if (filename != "") {
+		string content = file_get_contents(filename);
+		var@ v = parse_json(content);
+		if (@v == null) {
+			alert("Quizzy", "Failed to parse question pack.");
+			return;
+		}
+		json_object@ root_obj = cast<json_object>(v);
+		if (@root_obj != null) {
+			@root = root_obj;
+			pack_name = root.exists("name") ? string(root["name"]) : "Unnamed Pack";
+			@questions_arr = root.get_array("questions");
+		} else {
+			@questions_arr = cast<json_array>(v);
+		}
+	}
+	if (@questions_arr == null) {
+		@questions_arr = json_array();
+	}
+	if (filename == "") {
+		pack_name = input_box("Create Custom Pack", "Enter the name of your question pack:");
+		if (pack_name == "") return;
+		root.set("name", pack_name);
+	}
+	audio_form f;
+	f.create_window("Quizzy Pack Editor", false);
+	int q_text = f.create_input_box("Question Text", "", "", 0, false, true);
+	int opt1 = f.create_input_box("Option 1");
+	int opt2 = f.create_input_box("Option 2");
+	int opt3 = f.create_input_box("Option 3");
+	int opt4 = f.create_input_box("Option 4");
+	int correct = f.create_slider("Correct Option Index", 1, 1, 4);
+	int add_btn = f.create_button("Add Question");
+	int questions_list = f.create_list("Added Questions");
+	refresh_list_indices(f, questions_list, questions_arr);
+	int update_btn = f.create_button("Update Selected Question");
+	int remove_btn = f.create_button("Remove Question");
+	int move_up_btn = f.create_button("Move Up");
+	int move_down_btn = f.create_button("Move Down");
+	int save_btn = f.create_button("Finish and Save Pack");
+	int cancel_btn = f.create_button("Cancel", false, true);
+	update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+	f.focus(q_text);
+	while (true) {
+		wait(5);
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
+		bool enter_pressed = key_pressed(KEY_RETURN);
+		f.monitor();
+		if (f.is_pressed(add_btn)) {
+			if (validate_question_fields(f, q_text, opt1, opt2, opt3, opt4)) {
+				json_object@ q_obj = create_question_json(f, q_text, opt1, opt2, opt3, opt4, correct);
+				questions_arr.add(q_obj);
+				f.add_list_item(questions_list, (questions_arr.size()) + ": " + f.get_text(q_text));
+				clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
+				f.focus(q_text);
+				speak("Question added.", false);
+				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+			}
+		}
+		if (f.get_current_focus() == questions_list && enter_pressed) {
+			int pos = f.get_list_position(questions_list);
+			if (pos >= 0) {
+				speak("Question " + (pos + 1) + " selected. Tab to management options.", false);
+				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+			}
+		}
+		if (f.is_pressed(update_btn)) {
+			int pos = f.get_list_position(questions_list);
+			if (pos < 0) continue;
+			if (f.get_text(q_text) == "") {
+				load_question_to_fields(f, questions_arr.get_object(pos), q_text, opt1, opt2, opt3, opt4, correct);
+				speak("Question loaded into fields for editing.", false);
+				f.focus(q_text);
+			} else {
+				if (validate_question_fields(f, q_text, opt1, opt2, opt3, opt4)) {
+					json_object@ q_obj = create_question_json(f, q_text, opt1, opt2, opt3, opt4, correct);
+					questions_arr[pos] = q_obj;
+					f.edit_list_item(questions_list, (pos + 1) + ": " + f.get_text(q_text), pos);
+					speak("Question updated.", false);
+					clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
+				}
+			}
+		}
+		if (f.is_pressed(remove_btn)) {
+			int pos = f.get_list_position(questions_list);
+			if (pos >= 0) {
+				questions_arr.remove(pos);
+				f.delete_list_item(questions_list, pos);
+				speak("Question removed.", false);
+				refresh_list_indices(f, questions_list, questions_arr);
+				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+			}
+		}
+		if (f.is_pressed(move_up_btn)) {
+			handle_move_item(f, questions_list, questions_arr, -1);
+			update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+		}
+		if (f.is_pressed(move_down_btn)) {
+			handle_move_item(f, questions_list, questions_arr, 1);
+			update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
+		}
+		if (f.is_pressed(save_btn)) {
+			if (questions_arr.size() == 0) {
+				alert("Quizzy", "You must add at least one question before saving.");
+				continue;
+			}
+			root.set("questions", questions_arr);
+			string json_data = root.stringify(4);
+			string save_path = filename != "" ? filename : get_custom_questions_path() + pack_name + ".json";
+			if (file_put_contents(save_path, json_data)) {
+				alert("Quizzy", "Question pack '" + pack_name + "' saved successfully!");
+				return;
+			} else {
+				alert("Quizzy", "Failed to save the question pack.");
+			}
+		}
+		if (f.is_pressed(cancel_btn)) {
+			if (ask_yes_no("Quizzy", "Are you sure you want to cancel? All progress will be lost.") == 1) {
+				return;
+			}
+			f.focus(q_text);
+		}
+	}
+}
+
+void update_management_button_states(audio_form& f, int list_id, json_array@ arr, int update_btn, int remove_btn, int move_up_btn, int move_down_btn) {
+	int pos = f.get_list_position(list_id);
+	bool has_selection = (pos >= 0);
+	f.set_state(update_btn, has_selection, true);
+	f.set_state(remove_btn, has_selection, true);
+	f.set_state(move_up_btn, (pos > 0), true);
+	f.set_state(move_down_btn, (has_selection && pos < int(arr.size()) - 1), true);
+}
+
+void handle_move_item(audio_form& f, int list_id, json_array@ arr, int direction) {
+	int pos = f.get_list_position(list_id);
+	int new_pos = pos + direction;
+	if (new_pos >= 0 && new_pos < int(arr.size())) {
+		var@ temp = arr[pos];
+		arr[pos] = arr[new_pos];
+		arr[new_pos] = temp;
+		refresh_list_indices(f, list_id, arr);
+		f.set_list_position(list_id, new_pos);
+		speak(direction < 0 ? "Moved up." : "Moved down.", false);
+	}
+}
+
+bool validate_question_fields(audio_form& f, int q, int o1, int o2, int o3, int o4) {
+	if (f.get_text(q) == "" || f.get_text(o1) == "" || f.get_text(o2) == "" || f.get_text(o3) == "" || f.get_text(o4) == "") {
+		alert("Quizzy", "All fields must be filled out.");
+		return false;
+	}
+	return true;
+}
+
+json_object@ create_question_json(audio_form& f, int q, int o1, int o2, int o3, int o4, int c) {
+	json_object@ obj = json_object();
+	obj.set("question", f.get_text(q));
+	json_array@ opts = json_array();
+	opts.add(f.get_text(o1));
+	opts.add(f.get_text(o2));
+	opts.add(f.get_text(o3));
+	opts.add(f.get_text(o4));
+	obj.set("options", opts);
+	obj.set("correct_index", int(f.get_slider(c)) - 1);
+	return obj;
+}
+
+void load_question_to_fields(audio_form& f, json_object@ obj, int q, int o1, int o2, int o3, int o4, int c) {
+	if (@obj == null) return;
+	f.set_text(q, string(obj["question"]));
+	json_array@ opts = obj.get_array("options");
+	if (@opts != null && opts.size() >= 4) {
+		f.set_text(o1, string(opts[0]));
+		f.set_text(o2, string(opts[1]));
+		f.set_text(o3, string(opts[2]));
+		f.set_text(o4, string(opts[3]));
+	}
+	f.set_slider(c, int(obj["correct_index"]) + 1);
+}
+
+void clear_question_fields(audio_form& f, int q, int o1, int o2, int o3, int o4, int c) {
+	f.set_text(q, "");
+	f.set_text(o1, "");
+	f.set_text(o2, "");
+	f.set_text(o3, "");
+	f.set_text(o4, "");
+	f.set_slider(c, 1);
+}
+
+void refresh_list_indices(audio_form& f, int list_id, json_array@ arr) {
+	f.clear_list(list_id);
+	for (uint i = 0; i < arr.size(); i++) {
+		json_object@ obj = arr.get_object(i);
+		if (@obj != null)
+			f.add_list_item(list_id, (i + 1) + ": " + string(obj["question"]));
+	}
+}

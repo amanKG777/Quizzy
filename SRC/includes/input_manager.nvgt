@@ -1,0 +1,36 @@
+funcdef void KeyEventHandler();
+
+class InputListener {
+	uint key;
+	KeyEventHandler@ handler;
+	InputListener(uint k, KeyEventHandler@ h) {
+		this.key = k;
+		@this.handler = @h;
+	}
+}
+
+class InputManager {
+	InputListener@[] global_listeners;
+	InputListener@[] local_listeners;
+	void register_global(uint key, KeyEventHandler@ handler) {
+		global_listeners.insert_last(InputListener(key, handler));
+	}
+	void register_local(uint key, KeyEventHandler@ handler) {
+		local_listeners.insert_last(InputListener(key, handler));
+	}
+	void clear_local() {
+		local_listeners.resize(0);
+	}
+	void monitor() {
+		for(uint i = 0; i < global_listeners.length(); i++) {
+			if (key_pressed(global_listeners[i].key)) {
+				global_listeners[i].handler();
+			}
+		}
+		for(uint i = 0; i < local_listeners.length(); i++) {
+			if (key_pressed(local_listeners[i].key)) {
+				local_listeners[i].handler();
+			}
+		}
+	}
+}

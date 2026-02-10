@@ -1,0 +1,461 @@
+#include "game_data.nvgt"
+#include "speech.nvgt"
+#include "progress_window.nvgt"
+
+class TranslationCache {
+	dictionary cache;
+	string cache_file;
+	TranslationCache() {
+		cache_file = get_preferences_path("Boostof Studios", "Quizzy") + "/translation_cache.json";
+		load();
+	}
+	void load() {
+		if (!file_exists(cache_file)) return;
+		string content = file_get_contents(cache_file);
+		json_object@ root = parse_json(content);
+		if (@root == null) return;
+		string[] keys = root.get_keys();
+		for (uint i = 0; i < keys.length(); i++) {
+			cache.set(keys[i], string(root[keys[i]]));
+		}
+	}
+	void save() {
+		json_object@ root = json_object();
+		string[] keys = cache.get_keys();
+		for (uint i = 0; i < keys.length(); i++) {
+			string val;
+			cache.get(keys[i], val);
+			root.set(keys[i], val);
+		}
+		file_put_contents(cache_file, root.stringify(4));
+	}
+	string get(string text, string lang) {
+		string key = lang + ":" + text;
+		string val;
+		if (cache.get(key, val)) return val;
+		return "";
+	}
+	void set(string text, string lang, string translated) {
+		string key = lang + ":" + text;
+		cache.set(key, translated);
+	}
+}
+
+TranslationCache t_cache;
+
+string fetch_json_with_progress(string url, string action_text, int base_progress = 0, int weight = 0) {
+	http h;
+	h.get(url);
+	bool created_pw = false;
+	if (@app.pw == null) {
+		@app.pw = progress_window("Fetching Questions", action_text);
+		created_pw = true;
+	} else {
+		app.pw.update(base_progress, action_text);
+	}
+	int btn_cancel = app.pw.f.create_button("Cancel", false, true);
+	while (!h.complete) {
+		wait(5);
+		app.touch.monitor();
+		int current_p = base_progress;
+		if (weight > 0) {
+			current_p += int(h.progress * float(weight));
+		} else {
+			current_p = int(h.progress * 100);
+		}
+		app.pw.update(current_p);
+		if (app.pw.f.is_pressed(btn_cancel)) {
+			h.reset();
+			return "";
+		}
+	}
+	if (created_pw) {
+		@app.pw = null;
+	}
+	if (h.status_code == 200) return h.response_body;
+	return "";
+}
+
+void init_questions(string lang, int category_id = 0, int max_questions = 16, bool is_blitz = false) {
+	string source = app.config.read_string("question_source", "Random");
+	if (!is_blitz) {
+		questions.resize(0);
+		@app.pw = progress_window("Quizzy", "Initializing questions...");
+	} else {
+		if (blitz_ready || blitz_fetching) return;
+		blitz_fetching = true;
+		blitz_mutex.lock();
+		blitz_pool.resize(0);
+		blitz_mutex.unlock();
+	}
+	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
+	string download_file = download_dir + "cat_" + category_id + "_" + lang + ".json";
+	if (!is_blitz && load_questions_from_cache(download_file)) {
+		if (questions.length() >= max_questions) {
+			questions.shuffle();
+			questions.resize(max_questions);
+			@app.pw = null;
+			return; 
+		}
+	}
+	string[] difficulties = {"easy", "medium", "hard"};
+	int[] amounts;
+	if (is_blitz) {
+		amounts = {7, 7, 6};
+	} else {
+		amounts = {5, 5, 6};
+	}
+	Question@[] target_temp;
+	int total_steps = difficulties.length();
+	for (uint d = 0; d < difficulties.length(); d++) {
+		int base_p = int((float(d) / float(total_steps)) * 100);
+		int weight = 100 / total_steps;
+		string action = "Fetching questions...";
+		if (@app.pw != null) app.pw.update(base_p, action);
+		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
+	}
+	if (!is_blitz && questions.length() < max_questions) {
+		if (@app.pw != null) app.pw.update(90, "Fetching additional questions...");
+		if (category_id != 0) {
+			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 90, 5);
+		}
+		if (questions.length() < max_questions) {
+			fetch_questions_smart(max_questions - questions.length(), "", 0, lang, max_questions, @questions, source, 95, 5);
+		}
+	} else if (is_blitz && target_temp.length() < max_questions) {
+		if (category_id != 0) {
+			fetch_questions_smart(max_questions - target_temp.length(), "", category_id, lang, max_questions, @target_temp, source, 90, 5);
+		}
+		if (target_temp.length() < max_questions) {
+			fetch_questions_smart(max_questions - target_temp.length(), "", 0, lang, max_questions, @target_temp, source, 95, 5);
+		}
+	}
+	if (is_blitz) {
+		if (target_temp.length() > max_questions) target_temp.resize(max_questions);
+		blitz_mutex.lock();
+		blitz_pool = target_temp;
+		blitz_ready = true;
+		blitz_fetching = false;
+		blitz_mutex.unlock();
+		@app.pw = null;
+		return;
+	}
+	bool online_success = (questions.length() >= max_questions);
+	string cache_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/offline_questions/";
+	if (!directory_exists(cache_dir)) directory_create(cache_dir);
+	string cache_file = cache_dir + "questions_" + lang + "_" + category_id + ".json";
+	if (online_success) {
+		save_questions_to_cache(cache_file, questions);
+	} else if (questions.length() == 0) {
+		if (load_questions_from_cache(cache_file)) {
+			speak(lang == "hi" ? "इंटरनेट उपलब्ध नहीं है। कैशे से प्रश्न लोड किए गए।" : "Internet unavailable. Loaded questions from cache.", false);
+		} else {
+			alert("Quizzy", "Failed to fetch questions and no cache available. Using fallback questions.");
+			if (lang == "hi") init_hindi_questions(); else init_fallback_questions();
+		}
+	}
+	if (questions.length() > max_questions) questions.resize(max_questions);
+	@app.pw = null;
+}
+
+void init_questions_bg(string lang, int category_id, int max_questions, bool is_blitz) {
+	init_questions(lang, category_id, max_questions, is_blitz);
+}
+
+void fetch_questions_smart(int amount, string difficulty, int category_id, string lang, int max_questions, Question@[]@ target_arr, string source, int base_p = 0, int weight = 0) {
+	int sub_weight = (weight > 0) ? weight / 2 : 0;
+	if (source == "OpenTDB") {
+		fetch_from_api(amount, difficulty, category_id, lang, max_questions, target_arr, base_p, weight);
+	} else if (source == "TriviaAPI") {
+		fetch_from_trivia_api_v2(amount, difficulty, category_id, lang, max_questions, target_arr, base_p, weight);
+	} else { 
+		int opentdb_amount = amount / 2;
+		int trivia_amount = amount - opentdb_amount;
+		if (random(0, 1) == 0) {
+			fetch_from_api(opentdb_amount, difficulty, category_id, lang, max_questions, target_arr, base_p, sub_weight);
+			fetch_from_trivia_api_v2(trivia_amount, difficulty, category_id, lang, max_questions, target_arr, base_p + sub_weight, sub_weight);
+		} else {
+			fetch_from_trivia_api_v2(trivia_amount, difficulty, category_id, lang, max_questions, target_arr, base_p, sub_weight);
+			fetch_from_api(opentdb_amount, difficulty, category_id, lang, max_questions, target_arr, base_p + sub_weight, sub_weight);
+		}
+	}
+}
+
+void download_category(int category_id, string lang) {
+	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
+	if (!directory_exists(download_dir)) directory_create(download_dir);
+	string filename = download_dir + "cat_" + category_id + "_" + lang + ".json";
+	@app.pw = progress_window("Downloader", "Starting download for offline play...");
+	Question@[] download_pool;
+	string source = app.config.read_string("question_source", "Random");
+	int num_batches = 5;
+	for (int i = 0; i < num_batches; i++) {
+		int base_p = int((float(i) / float(num_batches)) * 100);
+		int weight = 100 / num_batches;
+		app.pw.update(base_p, "Downloading batch " + (i+1) + " of " + num_batches + "...");
+		fetch_questions_smart(20, "", category_id, lang, 100, @download_pool, source, base_p, weight);
+		wait(100); 
+	}
+	@app.pw = null;
+	if (download_pool.length() > 0) {
+		save_questions_to_cache(filename, download_pool);
+		alert("Quizzy", "Download complete! " + download_pool.length() + " questions saved for offline play.");
+	} else {
+		alert("Quizzy", "Download failed. Please check your internet connection.");
+	}
+}
+
+void save_questions_to_cache(string filename, Question@[]& target_arr) {
+	json_array@ arr = json_array();
+	for (uint i = 0; i < target_arr.length(); i++) {
+		json_object@ obj = json_object();
+		obj.set("question", target_arr[i].question);
+		obj.set("correct_index", target_arr[i].correct_index);
+		json_array@ opts = json_array();
+		for (uint j = 0; j < target_arr[i].options.length(); j++) {
+			opts.add(target_arr[i].options[j]);
+		}
+		obj.set("options", opts);
+		arr.add(obj);
+	}
+	file_put_contents(filename, arr.stringify(4));
+}
+
+bool load_questions_from_cache(string filename) {
+	if (!file_exists(filename)) return false;
+	string content = file_get_contents(filename);
+	var@ v = parse_json(content);
+	json_array@ arr = cast<json_array>(v);
+	if (@arr == null) return false;
+	questions.resize(0);
+	for (uint i = 0; i < arr.size(); i++) {
+		json_object@ obj = arr.get_object(i);
+		string q_text = string(obj["question"]);
+		int correct = int(obj["correct_index"]);
+		json_array@ opts_arr = obj.get_array("options");
+		string[] options;
+		for (uint j = 0; j < opts_arr.size(); j++) {
+			options.insert_last(string(opts_arr[j]));
+		}
+		questions.insert_last(Question(q_text, options, correct));
+	}
+	if (questions.length() > 0) {
+		for (uint i = 0; i < questions.length(); i++) {
+			int r = random(0, questions.length() - 1);
+			Question@ temp = questions[i];
+			@questions[i] = @questions[r];
+			@questions[r] = @temp;
+		}
+	}
+	return questions.length() > 0;
+}
+
+void fetch_from_api(int amount, string difficulty, int category_id, string lang, int max_questions, Question@[]@ target_arr, int base_p = 0, int weight = 0) {
+	if (amount <= 0 || target_arr.length() >= max_questions) return;
+	string url = "https://opentdb.com/api.php?amount=" + amount + "&type=multiple";
+	if (difficulty != "") url += "&difficulty=" + difficulty;
+	if (category_id > 0) url += "&category=" + category_id;
+	string response = fetch_json_with_progress(url, "Fetching questions...", base_p, weight);
+	if (response.empty()) return;
+	json_object@ root = parse_json(response);
+	if (@root == null) return;
+	int code = 0;
+	if (root.exists("response_code")) code = int(root["response_code"]);
+	if (code != 0) return;
+	json_array@ results = root.get_array("results");
+	if (@results == null) return;
+	for (uint i = 0; i < results.size(); i++) {
+		if (target_arr.length() >= max_questions) break;
+		json_object@ item = results.get_object(i);
+		if (@item == null) continue;
+		string q_text = html_entities_decode(string(item["question"]));
+		string correct = html_entities_decode(string(item["correct_answer"]));
+		json_array@ incorrect_json = item.get_array("incorrect_answers");
+		if (@incorrect_json == null) continue;
+		string[] options;
+		options.insert_last(correct);
+		for (uint j = 0; j < incorrect_json.size(); j++) {
+			options.insert_last(html_entities_decode(string(incorrect_json[j])));
+		}
+		if (lang == "hi") {
+			string[] to_translate;
+			to_translate.insert_last(q_text);
+			for (uint k = 0; k < options.length(); k++) to_translate.insert_last(options[k]);
+			string[] translated = translate_bundle(to_translate, "hi");
+			if (translated.length() >= 5 && options.length() >= 4) {
+				q_text = translated[0];
+				for (uint k = 0; k < 4; k++) options[k] = translated[k + 1];
+				correct = options[0]; 
+			}
+		}
+		options.shuffle();
+		int correct_idx = options.find(correct);
+		target_arr.insert_last(Question(q_text, options, correct_idx));
+	}
+}
+
+void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, string lang, int max_questions, Question@[]@ target_arr, int base_p = 0, int weight = 0) {
+	if (amount <= 0 || target_arr.length() >= max_questions) return;
+	string category_slug = "";
+	if (category_id > 0) {
+		if (category_id == 9) category_slug = "general_knowledge";
+		else if (category_id == 10) category_slug = "arts_and_literature";
+		else if (category_id == 11) category_slug = "film_and_tv";
+		else if (category_id == 12) category_slug = "music";
+		else if (category_id == 14) category_slug = "film_and_tv";
+		else if (category_id == 15) category_slug = "film_and_tv";
+		else if (category_id == 17) category_slug = "science";
+		else if (category_id == 18) category_slug = "science";
+		else if (category_id == 19) category_slug = "science";
+		else if (category_id == 20) category_slug = "society_and_culture";
+		else if (category_id == 21) category_slug = "sport_and_leisure";
+		else if (category_id == 22) category_slug = "geography";
+		else if (category_id == 23) category_slug = "history";
+		else if (category_id == 24) category_slug = "society_and_culture";
+		else if (category_id == 25) category_slug = "arts_and_literature";
+		else if (category_id == 27) category_slug = "science";
+	}
+	string url = "https://the-trivia-api.com/v2/questions?limit=" + amount;
+	if (difficulty != "") url += "&difficulties=" + difficulty;
+	if (category_slug != "") url += "&categories=" + category_slug;
+	string response = fetch_json_with_progress(url, "Fetching from TriviaAPI (" + difficulty + ")...", base_p, weight);
+	if (response.empty()) return;
+	var@ v = parse_json(response);
+	json_array@ results = cast<json_array>(v);
+	if (@results == null) return;
+	for (uint i = 0; i < results.size(); i++) {
+		if (target_arr.length() >= max_questions) break;
+		json_object@ item = results.get_object(i);
+		if (@item == null) continue;
+		json_object@ q_obj = item.get_object("question");
+		if (@q_obj == null) continue;
+		string q_text = string(q_obj["text"]);
+		string correct = string(item["correctAnswer"]);
+		json_array@ incorrect_json = item.get_array("incorrectAnswers");
+		if (@incorrect_json == null) continue;
+		string[] options;
+		options.insert_last(correct);
+		for (uint j = 0; j < incorrect_json.size(); j++) {
+			options.insert_last(string(incorrect_json[j]));
+		}
+		if (lang == "hi") {
+			string[] to_translate;
+			to_translate.insert_last(q_text);
+			for (uint k = 0; k < options.length(); k++) to_translate.insert_last(options[k]);
+			string[] translated = translate_bundle(to_translate, "hi");
+			if (translated.length() >= 5 && options.length() >= 4) {
+				q_text = translated[0];
+				for (uint k = 0; k < 4; k++) options[k] = translated[k + 1];
+				correct = options[0];
+			}
+		}
+		options.shuffle();
+		int correct_idx = options.find(correct);
+		target_arr.insert_last(Question(q_text, options, correct_idx));
+	}
+}
+
+string[] translate_bundle(string[]@ texts, string target_lang) {
+	string[] results;
+	if (texts.length() == 0) return results;
+	bool all_cached = true;
+	string[] translated_batch;
+	for (uint i = 0; i < texts.length(); i++) {
+		string cached = t_cache.get(texts[i], target_lang);
+		if (cached != "") {
+			translated_batch.insert_last(cached);
+		} else {
+			all_cached = false;
+			break;
+		}
+	}
+	if (all_cached) return translated_batch;
+	string joined = join(texts, "\n");
+	http h;
+	string url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" + target_lang + "&dt=t";
+	string post_data = "q=" + url_encode(joined);
+	if (!h.post(url, post_data)) return texts;
+	if (@app.pw != null) {
+		app.pw.update(app.pw.f.get_progress(app.pw.pb), "Translating to " + target_lang + "...");
+	}
+	while (!h.complete) {
+		wait(5);
+		app.touch.monitor();
+		if (@app.pw != null) {
+			int p = int(h.progress * 100);
+		}
+	}
+	if (h.status_code != 200) return texts;
+	json_array@ root = parse_json(h.response_body);
+	if (@root == null) return texts;
+	string[] fresh_results;
+	if (root.size() > 0 && root.is_array(0)) {
+		json_array@ sentences = root.get_array(0);
+		for (uint i = 0; i < sentences.size(); i++) {
+			if (sentences.is_array(i)) {
+				json_array@ sentence = sentences.get_array(i);
+				if (sentence.size() > 0) {
+					fresh_results.insert_last(string(sentence[0]));
+				}
+			}
+		}
+	}
+	if (fresh_results.length() >= texts.length()) {
+		for (uint i = 0; i < texts.length(); i++) {
+			t_cache.set(texts[i], target_lang, fresh_results[i]);
+		}
+		t_cache.save();
+		return fresh_results;
+	}
+	if (fresh_results.length() < texts.length()) {
+		while (fresh_results.length() < texts.length()) {
+			fresh_results.insert_last(texts[fresh_results.length()]);
+		}
+	}
+	return fresh_results;
+}
+
+void init_hindi_questions() {
+	questions.insert_last(Question("भारत की राजधानी क्या है?", {"मुंबई", "नई दिल्ली", "कोलकाता", "चेन्नई"}, 1));
+	questions.insert_last(Question("लौह पुरुष के नाम से किसे जाना जाता है?", {"महात्मा गांधी", "जवाहरलाल नेहरू", "सरदार वल्लभभाई पटेल", "सुभाष चंद्र बोस"}, 2));
+	questions.insert_last(Question("लाल ग्रह के नाम से किस ग्रह को जाना जाता है?", {"पृथ्वी", "मंगल", "बृहस्पति", "शनि"}, 1));
+	questions.insert_last(Question("पृथ्वी पर सबसे बड़ा महासागर कौन सा है?", {"अटलांटिक महासागर", "हिंद महासागर", "आर्कटिक महासागर", "प्रशांत महासागर"}, 3));
+	questions.insert_last(Question("भारत का राष्ट्रगान किसने लिखा था?", {"रवींद्रनाथ टैगोर", "बंकिम चंद्र चट्टोपाध्याय", "सरोजिनी नाटडू", "महात्मा गांधी"}, 0));
+	questions.insert_last(Question("कौन सा जानवर 'रेगिस्तान का जहाज' कहलाता है?", {"घोड़ा", "हाथी", "ऊंट", "शेर"}, 2));
+	questions.insert_last(Question("सौरमंडल का सबसे छोटा ग्रह कौन सा है?", {"बुध", "शुक्र", "मंगल", "प्लूटो"}, 0));
+	questions.insert_last(Question("हिंदी दिवस कब मनाया जाता है?", {"14 सितंबर", "2 अक्टूबर", "15 अगस्त", "26 जनवरी"}, 0));
+	questions.insert_last(Question("क्रिकेट में एक ओवर में कितनी गेंदे होती हैं?", {"चार", "पाँच", "छह", "आठ"}, 2));
+	questions.insert_last(Question("ताजमहल कहाँ स्थित है?", {"दिल्ली", "आगरा", "जयपुर", "लखनऊ"}, 1));
+	questions.insert_last(Question("भारत का राष्ट्रीय फूल कौन सा है?", {"गुलाब", "कमल", "सूरजमुखी", "गेंदा"}, 1));
+	questions.insert_last(Question("मिसाइल मैन ऑफ इंडिया के नाम से किसे जाना जाता है?", {"डॉ. ए.पी.जे. अब्दुल कलाम", "डॉ. होमी जहांगीर भाभा", "डॉ. सी.वी. रमन", "डॉ. विक्रम साराभाई"}, 0));
+	questions.insert_last(Question("गेटवे ऑफ इंडिया कहाँ स्थित है?", {"नई दिल्ली", "मुंबई", "चेन्नई", "कोलकाता"}, 1));
+	questions.insert_last(Question("कंप्यूटर का जनक कहा जाता है?", {"चार्ल्स बैबेज", "बिल गेट्स", "स्टीव जॉब्स", "मार्क जुकरबर्ग"}, 0));
+	questions.insert_last(Question("भारत की सबसे लंबी नदी कौन सी है?", {"यमुना", "ब्रह्मपुत्र", "गंगा", "गोदावरी"}, 2));
+	questions.insert_last(Question("सौरमंडल का सबसे बड़ा ग्रह कौन सा है?", {"शनि", "बृहस्पति", "नेपच्यून", "मंगल"}, 1));
+	for (uint i = 0; i < questions.length(); i++) {
+		int r = random(0, questions.length() - 1);
+		Question@ temp = questions[i];
+		@questions[i] = @questions[r];
+		@questions[r] = @temp;
+	}
+	if (questions.length() > 16) questions.resize(16);
+}
+
+void init_fallback_questions() {
+	questions.insert_last(Question("What is the capital of India?", {"Mumbai", "New Delhi", "Kolkata", "Chennai"}, 1));
+	questions.insert_last(Question("Who is known as the Iron Man of India?", {"Mahatma Gandhi", "Jawaharlal Nehru", "Sardar Vallabhbhai Patel", "Subhas Chandra Bose"}, 2));
+	questions.insert_last(Question("Which planet is known as the Red Planet?", {"Earth", "Mars", "Jupiter", "Saturn"}, 1));
+	questions.insert_last(Question("Which is the largest ocean on Earth?", {"Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"}, 3));
+	questions.insert_last(Question("Who wrote the national anthem of India?", {"Rabindranath Tagore", "Bankim Chandra Chattopadhyay", "Sarojini Naidu", "Mahatma Gandhi"}, 0));
+	questions.insert_last(Question("Which animal is known as the Ship of the Desert?", {"Horse", "Elephant", "Camel", "Lion"}, 2));
+	questions.insert_last(Question("Which is the smallest planet in our solar system?", {"Mercury", "Venus", "Mars", "Pluto"}, 0));
+	questions.insert_last(Question("How many days are there in a leap year?", {"364", "365", "366", "367"}, 2));
+	questions.insert_last(Question("Which is the longest river in the world?", {"Amazon", "Nile", "Ganga", "Mississippi"}, 1));
+	questions.insert_last(Question("Who painted the Mona Lisa?", {"Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Claude Monet"}, 2));
+	questions.insert_last(Question("Which gas do plants absorb from the atmosphere?", {"Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"}, 2));
+	questions.insert_last(Question("What is the hardest natural substance on Earth?", {"Gold", "Iron", "Diamond", "Platinum"}, 2));
+	questions.insert_last(Question("Which continent is known as the 'Dark Continent'?", {"Asia", "Africa", "Australia", "South America"}, 1));
+	questions.insert_last(Question("Who is the author of 'Harry Potter' series?", {"J.R.R. Tolkien", "George R.R. Martin", "J.K. Rowling", "Roald Dahl"}, 2));
+	questions.insert_last(Question("Which organ is responsible for pumping blood in the human body?", {"Lungs", "Brain", "Heart", "Liver"}, 2));
+	questions.insert_last(Question("What is the national currency of Japan?", {"Yuan", "Won", "Yen", "Baht"}, 2));
+}
