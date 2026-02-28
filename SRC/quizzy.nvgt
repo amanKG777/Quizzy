@@ -1,0 +1,1245 @@
+#pragma asset "sounds.dat"
+#pragma asset "LOGO.png"
+#include "menu.nvgt"
+#include "form.nvgt"
+
+const string GAME_VERSION = "1.1.9";
+const string GITHUB_REPO_OWNER = "amanKG777";
+const string GITHUB_REPO_NAME = "Quizzy";
+const string UPDATE_API_URL = "https://api.github.com/repos/" + GITHUB_REPO_OWNER + "/" + GITHUB_REPO_NAME + "/releases/latest";
+
+bool is_version_newer(string current, string online) {
+	current = current.trim_whitespace();
+	online = online.trim_whitespace();
+	if (online.starts_with("v")) online = online.substr(1);
+	if (current == "") return false;
+	if (online == "") return false;
+	string[] curr_parts = current.split(".");
+	string[] online_parts = online.split(".");
+	uint max_len = (curr_parts.length() > online_parts.length()) ? curr_parts.length() : online_parts.length();
+	for(uint i=0; i<max_len; i++) {
+		int c_val = 0;
+		int o_val = 0;
+		if (i < curr_parts.length()) c_val = parse_int(curr_parts[i]);
+		if (i < online_parts.length()) o_val = parse_int(online_parts[i]);
+		if (o_val > c_val) return true;
+		if (o_val < c_val) return false;
+	}
+	return false;
+}
+
+bool is_installer_distribution() {
+	#if windows
+	return file_exists("unins000.exe");
+	#endif
+	return false;
+}
+
+void check_for_updates(bool silent_on_no_update) {
+	http update_req;
+	name_value_collection headers;
+	headers.add("User-Agent", "Quizzy-Updater");
+	string github_token = ""; 
+	if (file_exists("github_token.txt")) {
+		github_token = file_get_contents("github_token.txt").trim_whitespace();
+	} else if (file_exists("SRC/github_token.txt")) {
+		github_token = file_get_contents("SRC/github_token.txt").trim_whitespace();
+	}
+	if (github_token != "") {
+		headers.add("Authorization", "Bearer " + github_token);
+	}
+	if (!silent_on_no_update) speak("Checking for updates...", true);
+	update_req.get(UPDATE_API_URL, headers);
+	timer check_timer;
+	while (!update_req.complete && check_timer.elapsed < 10000) {
+		wait(5);
+		touch_manager.monitor();
+	}
+	if (update_req.status_code == 200) {
+		string json_response = update_req.response_body;
+		json_object@ root = null;
+		try {
+			@root = parse_json(json_response);
+		} catch {
+			if (!silent_on_no_update) speak("Error parsing update information.");
+			return;
+		}
+		if (@root != null) {
+			string tag_name = "";
+			string body_text = "";
+			string download_url = "";
+			if (root.exists("tag_name")) tag_name = string(root["tag_name"]);
+			if (root.exists("body")) body_text = string(root["body"]);
+			string target_file_name = "Quizzy.zip";
+			if (is_installer_distribution()) target_file_name = "Quizzy_Setup.exe";
+			#if android
+			target_file_name = "Quizzy.apk";
+			#endif
+			if (root.exists("assets") && root.is_array("assets")) {
+				json_array@ assets = root.get_array("assets");
+				for(uint i=0; i<assets.size(); i++) {
+					json_object@ asset = assets.get_object(i);
+					if (string(asset["name"]) == target_file_name) {
+						download_url = string(asset["browser_download_url"]);
+						break;
+					}
+				}
+			}
+			if (download_url == "") {
+				if (root.exists("assets") && root.is_array("assets")) {
+					json_array@ assets = root.get_array("assets");
+					for(uint i=0; i<assets.size(); i++) {
+						json_object@ asset = assets.get_object(i);
+						string asset_name = string(asset["name"]);
+						if (asset_name == "Quizzy_Setup.exe" || asset_name == "Quizzy.zip" || asset_name == "Quizzy.apk") {
+							download_url = string(asset["browser_download_url"]);
+							target_file_name = asset_name;
+							break;
+						}
+					}
+				}
+			}
+			if (is_version_newer(GAME_VERSION, tag_name)) {
+				audio_form update_form;
+				update_form.create_window("Update Available", false, true);
+				string info_text = "A new version (" + tag_name + ") is available.\n\nChangelog:\n" + body_text;
+				int txt_info = update_form.create_input_box("Update Information", info_text, "", 0, true, true);
+				int btn_download = update_form.create_button("Download &Update", true);
+				int btn_cancel = update_form.create_button("&Cancel", false, true);
+				bool do_download = false;
+				update_form.focus(btn_download);
+				while(true) {
+					wait(5);
+					touch_manager.monitor();
+					update_form.monitor();
+					gm.prepare_frame();
+					gm.draw_form(update_form);
+					gm.present_frame();
+					if (update_form.is_pressed(btn_download)) {
+						do_download = true;
+						break;
+					}
+					if (update_form.is_pressed(btn_cancel) || key_pressed(KEY_ESCAPE)) {
+						break;
+					}
+				}
+				if (do_download && download_url != "") {
+					speak("Preparing update...", true);
+					#if windows
+					http downloader;
+					speak("Downloading update...", true);
+					downloader.get(download_url);
+					while (!downloader.complete) {
+						wait(100);
+					}
+					if (downloader.status_code == 200) {
+						file f;
+						string download_path = DIRECTORY_TEMP + target_file_name;
+						if (f.open(download_path, "wb")) {
+							f.write(downloader.response_body);
+							f.close();
+							if (target_file_name.ends_with(".exe")) {
+								speak("Launching installer...", true);
+								run(download_path, "", false, false);
+								exit();
+							} else if (target_file_name.ends_with(".zip")) {
+								speak("Extracting update...", true);
+								string current_exe = get_SCRIPT_MAIN_PATH();
+								string current_dir = cwdir();
+								string ps_script = "$exePath = '\" + current_exe + \"'; $downloadPath = '\" + download_path + \"'; $destPath = '\" + current_dir + \"'; " +
+									"$proc = Get-Process | Where-Object { try { $_.MainModule.FileName -eq $exePath } catch { $false } }; " +
+									"if ($proc) { $proc | Wait-Process }; " +
+									"Start-Sleep -s 1; " +
+									"for ($i=0; $i -lt 10; $i++) { " +
+									"  try { " +
+									"    Expand-Archive -Path $downloadPath -DestinationPath $destPath -Force; " +
+									"    Remove-Item -Path $downloadPath -Force; " +
+									"    Start-Process $exePath; " +
+									"    break; " +
+									"  } catch { Start-Sleep -s 1 } " +
+									"}";
+								run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
+								exit();
+							}
+						}
+					}
+					#endif
+					#if android
+					speak("Opening download link...", true);
+					wait(1000);
+					urlopen(download_url);
+					exit();
+					#endif
+				}
+			} else {
+				if (!silent_on_no_update) speak("You are running the latest version.");
+			}
+		}
+	} else {
+		if (!silent_on_no_update) speak("Failed to check for updates. Status code: " + update_req.status_code);
+	}
+}
+
+#include "sound_pool.nvgt"
+#include "speech.nvgt"
+#include "settings.nvgt"
+#include "game_data.nvgt"
+#include "questions.nvgt"
+#include "pack_manager.nvgt"
+#include "graphics_manager.nvgt"
+#include "touch.nvgt"
+
+touch_gesture_manager touch_manager;
+touch_keyboard_interface@ touch_keys;
+
+bool lifeline_5050 = true;
+bool lifeline_phone = true;
+bool lifeline_audience = true;
+bool lifeline_double_dip = true;
+bool lifeline_expert = true;
+bool menu_music_enabled = true;
+bool anticipation_enabled = true;
+int lifelines_used_count = 0;
+bool blitz_played = false;
+int bonus_money = 0;
+
+pack_file game_pack;
+sound bg_music;
+sound_pool pool;
+tts_voice voice;
+settings config;
+string current_lang = "en";
+string[] prizes = {"1,000", "2,000", "3,000", "5,000", "10,000", "20,000", "40,000", "80,000", "1,60,000", "3,20,000", "6,40,000", "12,50,000", "25,00,000", "50,00,000", "1,00,00,000", "7,00,00,000"};
+
+void play_sfx(string filename, bool wait_for_completion = false) {
+	if (wait_for_completion) {
+		sound s;
+		if (load_sound(s, filename)) {
+			s.volume = 0; 
+			s.play();
+			while (s.playing) {
+				wait(5);
+				touch_manager.monitor();
+				if (gm.initialized) {
+					gm.prepare_frame();
+					gm.draw_logo();
+					gm.present_frame();
+				}
+			}
+		} else {
+			if (@pool == null) return;
+			int slot = pool.play_stationary(filename, false);
+			if (slot < 0) slot = pool.play_stationary("sounds/" + filename, false);
+			if (slot >= 0) {
+				pool.update_sound_start_values(slot, 0, 0, 100); 
+			}
+		}
+	} else {
+		if (@pool == null) return;
+		int slot = pool.play_stationary(filename, false);
+		if (slot < 0) slot = pool.play_stationary("sounds/" + filename, false);
+		if (slot >= 0) {
+			pool.update_sound_start_values(slot, 0, 0, 100); 
+		}
+	}
+}
+
+bool load_sound(sound& s, string filename) {
+	if (s.load(filename)) return true;
+	if (s.load("sounds/" + filename)) return true;
+	if (s.load("SRC/sounds/" + filename)) return true;
+	return false;
+}
+
+void apply_orientation(string orient) {
+	string value = "";
+	if (orient == "Landscape") value = "LandscapeLeft LandscapeRight";
+	else if (orient == "Portrait") value = "Portrait PortraitUpsideDown";
+	sdl_set_hint("SDL_HINT_ORIENTATIONS", value);
+}
+
+void main() {
+	config.setup("Boostof Studios", "Quizzy", false);
+	apply_orientation(config.read_string("orientation", "Auto"));
+	dictionary m;
+	m.set("double_tap1f", int[] = {KEY_RETURN, KEY_SPACE});
+	m.set("double_tap2f", KEY_ESCAPE);
+	m.set("swipe_up1f", KEY_UP);
+	m.set("swipe_down1f", KEY_DOWN);
+	m.set("swipe_left1f", int[] = {KEY_LSHIFT, KEY_TAB});
+	m.set("swipe_right1f", KEY_TAB);
+	m.set("swipe_left2f", KEY_LEFT);
+	m.set("swipe_right2f", KEY_RIGHT);
+	m.set("swipe_up2f", KEY_PAGEUP);
+	m.set("swipe_down2f", KEY_PAGEDOWN);
+	@touch_keys = touch_keyboard_interface(touch_manager, m);
+	touch_manager.add_touch_interface(touch_keys);
+	int master_vol = int(config.read_number("master_volume", 100));
+	set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+	menu_music_enabled = (config.read_string("menu_music_enabled", "true") == "true");
+	anticipation_enabled = (config.read_string("anticipation_enabled", "true") == "true");
+	if (game_pack.open("soundsd.dat") || game_pack.open("SRC/soundsd.dat") || game_pack.open("sounds.dat") || game_pack.open("SRC/sounds.dat")) {
+		@sound_default_pack = @game_pack;
+	}
+	string play_intro = config.read_string("play_startup_sound", "true");
+	show_window("Quizzy");
+	gm.setup();
+	gm.enabled = (config.read_string("visuals_enabled", "true") == "true");
+	gm.high_contrast = (config.read_string("high_contrast", "false") == "true");
+	gm.update_font(config.read_string("font_name", "arial"));
+	if (config.read_string("update_on_startup", "true") == "true") {
+		check_for_updates(true);
+	}
+	if (play_intro == "true") {
+		sound intro;
+		if (intro.load("kbc_intro_sfx.mp3") || intro.load("sounds/kbc_intro_sfx.mp3", null) || intro.load("SRC/sounds/kbc_intro_sfx.mp3", null)) {
+			intro.volume = 0;
+			intro.play();
+			timer intro_timer;
+			while (intro_timer.elapsed < 22000) {
+				wait(5);
+				touch_manager.monitor();
+				gm.draw_logo();
+				gm.present_frame();
+				if (key_pressed(KEY_RETURN)) {
+					intro.stop();
+					break;
+				}
+			}
+		}
+	}
+	main_menu();
+}
+
+void load_menu_music() {
+	if (!menu_music_enabled) return;
+	safe_stop(bg_music);
+	if (!load_sound(bg_music, "MenuMusic.mp3") && !load_sound(bg_music, "menuMusic.mp3")) return;
+	bg_music.volume = 0;
+	bg_music.play_looped();
+}
+
+string select_language() {
+	menu m;
+	m.add_item("English", "en");
+	m.add_item("Hindi", "hi");
+	m.add_item("Back", "back");
+	m.intro_text = "Select your preferred language.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	m.wrap = (config.read_string("menu_wrap", "false") == "true");
+	string lang = "en";
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			lang = m.selected_item_id;
+			if (lang == "" || lang == "back") return "back";
+			break;
+		}
+	}
+	return lang;
+}
+
+int select_category() {
+	menu m;
+	m.add_item("Random Categories", "0");
+	m.add_item("General Knowledge", "9");
+	m.add_item("Books", "10");
+	m.add_item("Film", "11");
+	m.add_item("Music", "12");
+	m.add_item("Television", "14");
+	m.add_item("Video Games", "15");
+	m.add_item("Science & Nature", "17");
+	m.add_item("Computers", "18");
+	m.add_item("Mathematics", "19");
+	m.add_item("Mythology", "20");
+	m.add_item("Sports", "21");
+	m.add_item("Geography", "22");
+	m.add_item("History", "23");
+	m.add_item("Politics", "24");
+	m.add_item("Art", "25");
+	m.add_item("Animals", "27");
+	m.add_item("Back", "back");
+	m.intro_text = "Select a category.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	m.wrap = (config.read_string("menu_wrap", "false") == "true");
+	int cat_id = 0;
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			if (m.selected_item_id == "back" || m.selected_item_id == "") return -1;
+			cat_id = parse_int(m.selected_item_id);
+			break;
+		}
+	}
+	return cat_id;
+}
+
+void settings_menu() {
+	string startup_setting = config.read_string("play_startup_sound", "true");
+	string wrap_setting = config.read_string("menu_wrap", "false");
+	string visuals_setting = config.read_string("visuals_enabled", "true");
+	string contrast_setting = config.read_string("high_contrast", "false");
+	string menu_music_setting = config.read_string("menu_music_enabled", "true");
+	string anticipation_setting = config.read_string("anticipation_enabled", "true");
+	string font_setting = config.read_string("font_name", "arial");
+	string orientation_setting = config.read_string("orientation", "Auto");
+	string source_setting = config.read_string("question_source", "Random");
+	string update_on_startup_setting = config.read_string("update_on_startup", "true");
+	audio_form f;
+	f.create_window("Settings", false, true);
+	int chk_startup = f.create_checkbox("Enable Startup Intro", startup_setting == "true");
+	int chk_update_startup = f.create_checkbox("Check for updates on startup", update_on_startup_setting == "true");
+	int btn_check_now = f.create_button("Check for updates now");
+	int chk_wrap = f.create_checkbox("Enable Menu Wrapping", wrap_setting == "true");
+	int chk_visuals = f.create_checkbox("Enable Visual Display", visuals_setting == "true");
+	int chk_contrast = f.create_checkbox("Enable High Contrast", contrast_setting == "true");
+	int chk_music = f.create_checkbox("Enable Menu Music", menu_music_setting == "true");
+	int chk_anticipation = f.create_checkbox("Enable Heartbeat", anticipation_setting == "true");
+	int list_source = f.create_list("Question Source");
+	string[] sources = {"OpenTDB", "TriviaAPI", "Random"};
+	string[] source_labels = {"Open Trivia DB", "The Trivia API", "Random (Mixed)"};
+	for (uint i = 0; i < sources.length(); i++) {
+		f.add_list_item(list_source, source_labels[i]);
+		if (sources[i] == source_setting) f.set_list_position(list_source, i);
+	}
+	int list_orientation = f.create_list("Screen Orientation");
+	string[] orientations = {"Auto", "Landscape", "Portrait"};
+	for (uint i = 0; i < orientations.length(); i++) {
+		f.add_list_item(list_orientation, orientations[i]);
+		if (orientations[i] == orientation_setting) f.set_list_position(list_orientation, i);
+	}
+	int list_font = f.create_list("Font Selection");
+	string[] fonts = {"arial", "verdana", "tahoma", "georgia", "times", "comic", "hindi"};
+	for (uint i = 0; i < fonts.length(); i++) {
+		f.add_list_item(list_font, fonts[i]);
+		if (fonts[i] == font_setting) f.set_list_position(list_font, i);
+	}
+	int btn_save = f.create_button("Save Settings", true);
+	int btn_cancel = f.create_button("Cancel", false, true);
+	f.focus(chk_startup);
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
+		f.monitor();
+		if (f.is_pressed(btn_check_now)) {
+			check_for_updates(false);
+		}
+		if (f.is_pressed(btn_save)) {
+			config.write_string("play_startup_sound", f.is_checked(chk_startup) ? "true" : "false");
+			config.write_string("update_on_startup", f.is_checked(chk_update_startup) ? "true" : "false");
+			config.write_string("menu_wrap", f.is_checked(chk_wrap) ? "true" : "false");
+			bool v_enabled = f.is_checked(chk_visuals);
+			config.write_string("visuals_enabled", v_enabled ? "true" : "false");
+			gm.enabled = v_enabled;
+			bool h_contrast = f.is_checked(chk_contrast);
+			config.write_string("high_contrast", h_contrast ? "true" : "false");
+			gm.high_contrast = h_contrast;
+			menu_music_enabled = f.is_checked(chk_music);
+			config.write_string("menu_music_enabled", menu_music_enabled ? "true" : "false");
+			if (!menu_music_enabled) safe_stop(bg_music);
+			else if (!bg_music.playing) {
+				load_menu_music();
+			}
+			anticipation_enabled = f.is_checked(chk_anticipation);
+			config.write_string("anticipation_enabled", anticipation_enabled ? "true" : "false");
+			int source_pos = f.get_list_position(list_source);
+			if (source_pos >= 0) {
+				config.write_string("question_source", sources[source_pos]);
+			}
+			int orient_pos = f.get_list_position(list_orientation);
+			if (orient_pos >= 0) {
+				string new_orient = orientations[orient_pos];
+				config.write_string("orientation", new_orient);
+				apply_orientation(new_orient);
+			}
+			int font_pos = f.get_list_position(list_font);
+			if (font_pos >= 0) {
+				string new_font = fonts[font_pos];
+				config.write_string("font_name", new_font);
+				gm.update_font(new_font);
+			}
+			speak("Settings saved.");
+			break;
+		}
+		if (f.is_pressed(btn_cancel)) {
+			break;
+		}
+	}
+}
+
+void select_font_menu() {
+	menu m;
+	m.add_item("Arial", "arial");
+	m.add_item("Verdana", "verdana");
+	m.add_item("Tahoma", "tahoma");
+	m.add_item("Georgia", "georgia");
+	m.add_item("Times New Roman", "times");
+	m.add_item("Comic Sans MS", "comic");
+	m.add_item("Hindi", "hindi");
+	m.add_item("Back", "back");
+	m.intro_text = "Select a font.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	m.wrap = (config.read_string("menu_wrap", "false") == "true");
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			if (m.selected_item_id == "back" || m.selected_item_id == "") return;
+			string font_name = m.selected_item_id;
+			config.write_string("font_name", font_name);
+			gm.update_font(font_name);
+			speak("Font changed to " + font_name);
+			break;
+		}
+	}
+}
+
+void manage_custom_packs_menu() {
+	menu m;
+	m.add_item("Play Custom Pack", "play");
+	m.add_item("Create Custom Pack", "create");
+	m.add_item("Back", "back");
+	m.intro_text = "Manage Custom Packs. Select an option.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	while (true) {
+		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			string choice = m.selected_item_id;
+			if (choice == "play") {
+				string filename = select_custom_pack();
+				if (filename != "") {
+					custom_pack_actions_menu(filename);
+				}
+			} else if (choice == "create") {
+				create_custom_pack_form();
+			} else if (choice == "back" || choice == "") {
+				break;
+			}
+			m.reset();
+			m.add_item("Play Custom Pack", "play");
+			m.add_item("Create Custom Pack", "create");
+			m.add_item("Back", "back");
+		}
+	}
+}
+
+void custom_pack_actions_menu(string filename) {
+	menu m;
+	m.add_item("Play", "play");
+	m.add_item("Edit", "edit");
+	m.add_item("Delete", "delete");
+	m.add_item("Back", "back");
+	m.intro_text = "Select an action for the pack: " + filename;
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	while (true) {
+		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			string choice = m.selected_item_id;
+			if (choice == "play") {
+				if (load_custom_questions(filename)) {
+					current_lang = "en";
+					lifeline_5050 = true;
+					lifeline_phone = true;
+					lifeline_audience = true;
+					lifeline_double_dip = true;
+					lifeline_expert = true;
+					game_loop();
+					load_menu_music();
+				}
+				break;
+			} else if (choice == "edit") {
+				create_custom_pack_form(filename);
+				break;
+			} else if (choice == "delete") {
+				if (question("Quizzy", "Are you sure you want to delete this pack?") == 1) {
+					file_delete(filename);
+					alert("Quizzy", "The pack has been deleted.");
+					break;
+				}
+			} else if (choice == "back" || choice == "") {
+				break;
+			}
+		}
+	}
+}
+
+void show_credits() {
+	string credits_text = "QUIZZY CREDITS\r\n\r\n" +
+	"Project Lead & Programming\r\n" +
+	"--------------------------\r\n" +
+	"Aman Kumar Gupta (Boostof Studios)\r\n" +
+	"Aryan (Boostof Studios)\r\n\r\n" +
+	"Visuals & Art Direction\r\n" +
+	"-----------------------\r\n" +
+	"Shiva Choudhary\r\n" +
+	"Shiva designed the Quizzy logo you see when the game starts up. Beyond the art, \r\n" +
+	"he acted as our visual consultant, testing every part of the graphics system \r\n" +
+	"and providing the suggestions that helped us build the visual functionality \r\n" +
+	"from the ground up.\r\n\r\n" +
+	"Testing & Feedback\r\n" +
+	"------------------\r\n" +
+	"Shiva Choudhary\r\n" +
+	"Shiva was our primary tester, focusing specifically on the visual functionality \r\n" +
+	"to ensure the game looks as good as it plays.\r\n\r\n" +
+	"Third-Party Resources\r\n" +
+	"---------------------\r\n" +
+	"Questions: Trivia questions are sourced from the Open Trivia Database (OpenTDB) and The Trivia API (V2).\r\n" +
+	"Sounds: High-quality audio assets provided by J F Sounds.\r\n" +
+	"Engine: Built on the Non-Visual Gaming Toolkit (NVGT).\r\n\r\n" +
+	"A huge thanks to everyone who helped bring this project together.\r\n\r\n" +
+	"Boostof Studios, 2026.\r\n" +
+	"Made in New Delhi - India";
+	audio_form f;
+	f.create_window("Credits", false);
+	int credits_field = f.create_input_box("Credits Content", credits_text, "", 0, true, true);
+	int ok_btn = f.create_button("Back", true, true);
+	f.focus(ok_btn);
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
+		f.monitor();
+		if (f.is_pressed(ok_btn)) break;
+	}
+}
+
+void main_menu() {
+	load_menu_music();
+	menu m;
+	m.add_item("Start Game", "start");
+	m.add_item("Download Category for Offline", "download");
+	m.add_item("Manage Custom Packs", "manage_custom");
+	m.add_item("Settings", "settings");
+	m.add_item("Credits", "credits");
+	m.add_item("Exit", "exit");
+	m.intro_text = "Welcome to quizzy! Select an option.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.open_sound = "window_open.mp3";
+	m.close_sound = "window_close.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	int master_vol = int(config.read_number("master_volume", 100));
+	while (true) {
+		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (key_pressed(KEY_PAGEUP)) {
+			master_vol += 5;
+			if (master_vol > 100) master_vol = 100;
+			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+			set_sound_master_volume(db);
+			config.write_number("master_volume", master_vol);
+			speak("Volume " + master_vol);
+		}
+		if (key_pressed(KEY_PAGEDOWN)) {
+			master_vol -= 5;
+			if (master_vol < 0) master_vol = 0;
+			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+			set_sound_master_volume(db);
+			config.write_number("master_volume", master_vol);
+			speak("Volume " + master_vol);
+		}
+		if (key_pressed(KEY_F12)) {
+			string token = input_box("GitHub Token", "Paste your GitHub Personal Access Token here to enable updates for private repositories:");
+			if (token != "") {
+				file_put_contents("github_token.txt", token);
+				speak("Token saved.", true);
+				check_for_updates(false);
+			}
+		}
+		if (!m.monitor()) {
+			string choice = m.selected_item_id;
+			if (choice == "start") {
+				while (true) {
+					string lang = select_language();
+					if (lang == "back") break;
+					int cat_id = select_category();
+					if (cat_id == -1) continue; 
+					init_questions(lang, cat_id);
+					if (questions.length() == 0) {
+						alert("Quizzy", "No questions available to start the game.");
+					} else {
+						current_lang = lang;
+						lifeline_5050 = true;
+						lifeline_phone = true;
+						lifeline_audience = true;
+						lifeline_double_dip = true;
+						lifeline_expert = true;
+						lifelines_used_count = 0;
+						blitz_played = false;
+						bonus_money = 0;
+						game_loop();
+						load_menu_music();
+					}
+					break; 
+				}
+				main_menu_reset(m);
+			} else if (choice == "download") {
+				string lang = select_language();
+				if (lang != "back") {
+					int cat_id = select_category();
+					if (cat_id != -1) {
+						download_category(cat_id, lang);
+					}
+				}
+				main_menu_reset(m);
+			} else if (choice == "manage_custom") {
+				manage_custom_packs_menu();
+				main_menu_reset(m);
+			} else if (choice == "settings") {
+				settings_menu();
+			} else if (choice == "credits") {
+				show_credits();
+			} else if (choice == "exit" || choice == "") {
+				exit();
+			}
+		}
+	}
+}
+
+void main_menu_reset(menu@ m) {
+	m.reset();
+	m.add_item("Start Game", "start");
+	m.add_item("Download Category for Offline", "download");
+	m.add_item("Manage Custom Packs", "manage_custom");
+	m.add_item("Settings", "settings");
+	m.add_item("Credits", "credits");
+	m.add_item("Exit", "exit");
+}
+
+string select_custom_pack() {
+	string path = get_custom_questions_path();
+	string filename = open_file_dialog("Question Packs:json", "");
+	return filename;
+}
+
+string format_currency(int amount) {
+	string s = "" + amount;
+	if (s.length() <= 3) return s;
+	string res = s.substr(s.length() - 3);
+	s = s.substr(0, s.length() - 3);
+	while (s.length() > 2) {
+		res = s.substr(s.length() - 2) + "," + res;
+		s = s.substr(0, s.length() - 2);
+	}
+	if (s.length() > 0) res = s + "," + res;
+	return res;
+}
+
+void game_loop() {
+	load_menu_music();
+	blitz_ready = false;
+	blitz_fetching = false;
+	blitz_pool.resize(0);
+	for (uint i = 0; i < questions.length(); i++) {
+		if (!play_question(questions[i], i)) {
+			return;
+		}
+		if (!blitz_played && !blitz_fetching && !blitz_ready && (i >= 6 || lifelines_used_count >= 2)) {
+			init_questions(current_lang, 0, 20, true); 
+		}
+		if (!blitz_played && (i == 9 || lifelines_used_count >= 4)) {
+			string reason = (i == 9) ? "You have reached Question 10." : "You have used 4 or more lifelines.";
+			if (question("Quizzy", reason + " Would you like to take the blitz mode? If you don't take it now, you can press F5 while playing the game to take it later when you need it.") == 1) {
+				blitz_round();
+			}
+		}
+		if (i < 8) {
+			play_sfx("sahiJawab_10-02-26_16-31-59-720.mp3", true);
+		} else {
+			play_sfx("SahiJawab2_15-02-26_15-12-00-471.mp3", true);
+		}
+		if (i < questions.length() - 1) {
+			if (current_lang == "hi") {
+				speak("प्रश्न " + (i + 2));
+			} else {
+				speak("Question " + (i + 2));
+			}
+		} else {
+			if (current_lang == "hi") {
+				speak("सही जवाब।");
+			} else {
+				speak("Correct answer.");
+			}
+		}
+	}
+	safe_stop(bg_music);
+	string total_prize_str = prizes[questions.length() - 1];
+	int base_prize = parse_int(total_prize_str.replace(",", ""));
+	int grand_total = base_prize + bonus_money;
+	if (bonus_money > 0) {
+		alert("Quizzy", "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!");
+	} else {
+		alert("Quizzy", "Congratulations! You have won the game and earned ₹" + total_prize_str + "!");
+	}
+}
+
+void safe_stop(sound@ s) {
+	if (@s == null) return;
+	if (s.active && s.playing) {
+		s.stop();
+	}
+}
+
+bool play_question(Question@ q, int question_index) {
+	safe_stop(bg_music);
+	if (question_index < 10) {
+		load_sound(bg_music, "clock-sound.mp3");
+		bg_music.volume = 0; 
+	} else {
+		load_sound(bg_music, "gameMusic.mp3");
+		bg_music.volume = 0; 
+	}
+	bg_music.play_looped();
+	audio_form f;
+	f.create_window("Quizzy", false);
+	int q_field = f.create_input_box("Question", q.question, "", 0, true, true);
+	int progress_list = f.create_list("Prize Progress");
+	for (uint i = 0; i < prizes.length(); i++) {
+		string status = "";
+		if (int(i) < question_index) status = " - Completed";
+		else if (int(i) == question_index) status = " - Current";
+		f.add_list_item(progress_list, "Question " + (i + 1) + status + " for ₹" + prizes[i]);
+	}
+	f.set_list_position(progress_list, question_index);
+	int[] option_buttons;
+	for (uint i = 0; i < q.options.length(); i++) {
+		option_buttons.insert_last(f.create_button(q.options[i]));
+	}
+	int btn_5050 = -1;
+	if (lifeline_5050) btn_5050 = f.create_button("Lifeline: 50-50");
+	int btn_phone = -1;
+	if (lifeline_phone) btn_phone = f.create_button("Lifeline: Phone a Friend");
+	int btn_audience = -1;
+	if (lifeline_audience) btn_audience = f.create_button("Lifeline: Ask the Audience");
+	int btn_double = -1;
+	if (lifeline_double_dip) btn_double = f.create_button("Lifeline: Double Dip");
+	int btn_expert = -1;
+	if (lifeline_expert) btn_expert = f.create_button("Lifeline: Ask an Expert");
+	int quit_btn = f.create_button("Quit Game", false, true);
+	f.focus(q_field);
+	bool double_dip_active = false;
+	timer t; 
+	int master_vol = int(config.read_number("master_volume", 100));
+	set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		f.monitor();
+		gm.prepare_frame();
+		int current_selection = -1;
+		for (uint i = 0; i < option_buttons.length(); i++) {
+			if (f.get_current_focus() == option_buttons[i]) {
+				current_selection = i;
+				break;
+			}
+		}
+		gm.draw_question(q.question, q.options, current_selection);
+		gm.draw_prize_ladder(question_index, prizes);
+		gm.present_frame();
+		if (key_pressed(KEY_L)) {
+			string ladder = "Prize Ladder: ";
+			for (int j = int(prizes.length()) - 1; j >= 0; j--) {
+				string marker = "";
+				if (j == 4 || j == 9 || j == 15) marker = " - Milestone";
+				if (j == question_index) marker = " - CURRENT";
+				ladder += "Question " + (j + 1) + ": ₹" + prizes[j] + marker + ". ";
+			}
+			speak(ladder);
+		}
+		if (key_pressed(KEY_PAGEUP)) {
+			master_vol += 5;
+			if (master_vol > 100) master_vol = 100;
+			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+			set_sound_master_volume(db);
+			config.write_number("master_volume", master_vol);
+			speak("Volume " + master_vol);
+		}
+		if (key_pressed(KEY_PAGEDOWN)) {
+			master_vol -= 5;
+			if (master_vol < 0) master_vol = 0;
+			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+			set_sound_master_volume(db);
+			config.write_number("master_volume", master_vol);
+			speak("Volume " + master_vol);
+		}
+		if (key_pressed(KEY_F5) && !blitz_played) {
+			blitz_round();
+			f.focus(q_field); 
+		}
+		int time_limit = 0;
+		if (question_index < 5) time_limit = 30000;
+		else if (question_index < 10) time_limit = 60000;
+		if (time_limit > 0 && t.elapsed >= time_limit) {
+			safe_stop(bg_music);
+			play_sfx("Kbc Galat Jawab.mp3", true); 
+			alert("Time Up", "You ran out of time! The correct answer was: " + q.options[q.correct_index]);
+			return false;
+		}
+		for (uint i = 0; i < option_buttons.length(); i++) {
+			if (f.is_pressed(option_buttons[i])) {
+				play_sfx("click.mp3");
+				if (question("Quizzy", "Is this your final answer?") != 1) {
+					continue; 
+				}
+				safe_stop(bg_music);
+				{
+					sound lock_sfx;
+					if (load_sound(lock_sfx, "Kbc Option Lock Tune.mp3")) {
+						lock_sfx.volume = 0; 
+						lock_sfx.play();
+						timer wait_timer;
+						while (wait_timer.elapsed < 5000) {
+							wait(5);
+							touch_manager.monitor();
+							gm.prepare_frame();
+							gm.draw_question(q.question, q.options, current_selection);
+							gm.draw_prize_ladder(question_index, prizes);
+							gm.present_frame();
+						}
+						safe_stop(lock_sfx);
+					}
+				}
+				if (anticipation_enabled) {
+					sound heartbeat_sfx;
+					if (load_sound(heartbeat_sfx, "heartbeat.mp3")) {
+						heartbeat_sfx.volume = 0; 
+						heartbeat_sfx.play();
+						timer wait_timer;
+						while (wait_timer.elapsed < 4000) {
+							wait(5);
+							touch_manager.monitor();
+							gm.prepare_frame();
+							gm.draw_question(q.question, q.options, current_selection);
+							gm.draw_prize_ladder(question_index, prizes);
+							gm.present_frame();
+						}
+						safe_stop(heartbeat_sfx);
+					}
+				}
+				bool is_correct = (int(i) == q.correct_index);
+				if (is_correct) {
+					return true;
+				}
+				if (double_dip_active) {
+					play_sfx("Kbc Galat Jawab.mp3");
+					alert("Wrong!", "That is incorrect, but you have Double Dip active! Try one more time.");
+					double_dip_active = false;
+					f.set_state(option_buttons[i], false, true); 
+					if (question_index < 10) {
+						load_sound(bg_music, "clock-sound.mp3");
+						bg_music.volume = 0;
+					} else {
+						load_sound(bg_music, "gameMusic.mp3");
+						bg_music.volume = 0;
+					}
+					bg_music.play_looped();
+					continue;
+				}
+				safe_stop(bg_music);
+				play_sfx("Kbc Galat Jawab.mp3", true);
+				alert("Game Over", "Wrong answer! The correct answer was: " + q.options[q.correct_index] + ". Better luck next time.");
+				return false;
+			}
+		}
+		if (btn_5050 != -1 && f.is_pressed(btn_5050)) {
+			lifeline_5050 = false;
+			lifelines_used_count++;
+			f.set_state(btn_5050, false, false);
+			int removed = 0;
+			for (uint i = 0; i < option_buttons.length() && removed < 2; i++) {
+				if (int(i) != q.correct_index) {
+					f.set_state(option_buttons[i], false, true);
+					removed++;
+				}
+			}
+			alert("50-50", "Two incorrect options have been removed.");
+		}
+		if (btn_phone != -1 && f.is_pressed(btn_phone)) {
+			lifeline_phone = false;
+			lifelines_used_count++;
+			f.set_state(btn_phone, false, false);
+			safe_stop(bg_music);
+			t.pause();
+			play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
+			alert("Phone a Friend", "Your friend thinks the answer is: " + q.options[q.correct_index]);
+			bg_music.play_looped();
+			t.resume();
+		}
+		if (btn_audience != -1 && f.is_pressed(btn_audience)) {
+			lifeline_audience = false;
+			lifelines_used_count++;
+			f.set_state(btn_audience, false, false);
+			safe_stop(bg_music);
+			t.pause();
+			play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
+			show_audience_poll(q);
+			bg_music.play_looped();
+			t.resume();
+		}
+		if (btn_double != -1 && f.is_pressed(btn_double)) {
+			lifeline_double_dip = false;
+			lifelines_used_count++;
+			f.set_state(btn_double, false, false);
+			double_dip_active = true;
+			alert("Double Dip", "Double Dip active! You can now make two guesses for this question.");
+		}
+		if (btn_expert != -1 && f.is_pressed(btn_expert)) {
+			lifeline_expert = false;
+			lifelines_used_count++;
+			f.set_state(btn_expert, false, false);
+			alert("Ask an Expert", "The expert says the correct answer is definitely: " + q.options[q.correct_index]);
+		}
+		if (f.is_pressed(quit_btn)) {
+			play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);
+			safe_stop(bg_music);
+			return false;
+		}
+	}
+	safe_stop(bg_music);
+	return false;
+}
+
+void blitz_round() {
+	blitz_played = true;
+	if (!blitz_ready) {
+		init_questions(current_lang, 0, 20, true);
+	}
+	blitz_mutex.lock();
+	if (blitz_pool.length() == 0) {
+		blitz_mutex.unlock();
+		alert("Quizzy", "No blitz questions available.");
+		return;
+	}
+	int correct_count = 0;
+	timer blitz_timer;
+	int time_limit = 120000; 
+	safe_stop(bg_music);
+	load_sound(bg_music, "clock-sound.mp3");
+	bg_music.pitch = 120; 
+	bg_music.play_looped();
+	for (uint i = 0; i < blitz_pool.length(); i++) {
+		if (blitz_timer.elapsed >= time_limit) break;
+		Question@ q = blitz_pool[i];
+		blitz_mutex.unlock(); 
+		audio_form f;
+		f.create_window("BLITZ ROUND - Time Left: " + ((time_limit - blitz_timer.elapsed) / 1000) + "s", false);
+		f.create_input_box("Question", q.question, "", 0, true, true);
+		int[] option_buttons;
+		for (uint j = 0; j < q.options.length(); j++) {
+			option_buttons.insert_last(f.create_button(q.options[j]));
+		}
+		f.focus(option_buttons[0]);
+		bool answered = false;
+		while (blitz_timer.elapsed < time_limit && !answered) {
+			wait(5);
+			touch_manager.monitor();
+			f.monitor();
+			gm.prepare_frame();
+			int current_selection = -1;
+			for (uint j = 0; j < option_buttons.length(); j++) {
+				if (f.get_current_focus() == option_buttons[j]) {
+					current_selection = j;
+					break;
+				}
+			}
+			gm.draw_question(q.question, q.options, current_selection);
+			gm.present_frame();
+			for (uint j = 0; j < option_buttons.length(); j++) {
+				if (f.is_pressed(option_buttons[j])) {
+					answered = true;
+					if (int(j) == q.correct_index) {
+						correct_count++;
+						speak("correct");
+					} else {
+						speak("incorrect");
+					}
+					break;
+				}
+			}
+		}
+		if (blitz_timer.elapsed >= time_limit) break;
+		blitz_mutex.lock(); 
+	}
+	if (blitz_mutex.try_lock()) blitz_mutex.unlock(); 
+	safe_stop(bg_music);
+	bg_music.pitch = 100;
+	alert("Quizzy", "Blitz Over! You answered " + correct_count + " questions correctly!");
+	menu m;
+	m.add_item("Claim Bonus Money (₹" + (correct_count * 25000) + ")", "money");
+	m.add_item("Retrieve a Lifeline (Cost: ₹25,000)", "lifeline");
+	m.intro_text = "Select your reward.";
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	while (true) {
+		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			string choice = m.selected_item_id;
+			if (choice == "money") {
+				bonus_money += (correct_count * 25000);
+				speak("Bonus money added!");
+				break;
+			} else if (choice == "lifeline") {
+				bonus_money += (correct_count * 25000); 
+				retrieve_lifeline_menu();
+				break;
+			} else {
+				bonus_money += (correct_count * 25000);
+				break;
+			}
+		}
+	}
+}
+
+void retrieve_lifeline_menu() {
+	if (bonus_money < 25000) {
+		alert("Quizzy", "You do not have enough bonus money (₹25,000 required) to retrieve a lifeline.");
+		return;
+	}
+	menu m;
+	if (!lifeline_5050) m.add_item("50-50", "5050");
+	if (!lifeline_phone) m.add_item("Phone a Friend", "phone");
+	if (!lifeline_audience) m.add_item("Ask the Audience", "audience");
+	if (!lifeline_double_dip) m.add_item("Double Dip", "double");
+	if (!lifeline_expert) m.add_item("Ask an Expert", "expert");
+	if (m.get_item_count() == 0) {
+		alert("Quizzy", "All lifelines are already available.");
+		return;
+	}
+	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + bonus_money;
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.focus_first_item = true;
+	while (true) {
+		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+		if (!m.monitor()) {
+			string choice = m.selected_item_id;
+			if (choice == "back" || choice == "") break;
+			bonus_money -= 25000;
+			string name = "";
+			if (choice == "5050") { lifeline_5050 = true; name = "50-50"; }
+			else if (choice == "phone") { lifeline_phone = true; name = "Phone a Friend"; }
+			else if (choice == "audience") { lifeline_audience = true; name = "Ask the Audience"; }
+			else if (choice == "double") { lifeline_double_dip = true; name = "Double Dip"; }
+			else if (choice == "expert") { lifeline_expert = true; name = "Ask an Expert"; }
+			if (name != "") {
+				alert("Quizzy", "The " + name + " lifeline is now available!");
+				speak("Lifeline retrieved!");
+			}
+			break;
+		}
+	}
+}
+
+void show_audience_poll(Question@ q) {
+	int[] votes(q.options.length());
+	int total_votes = 100;
+	int correct_votes = random(40, 80); 
+	votes[q.correct_index] = correct_votes;
+	total_votes -= correct_votes;
+	for (uint i = 0; i < votes.length(); i++) {
+		if (int(i) == q.correct_index) continue;
+		if (total_votes <= 0) {
+			votes[i] = 0;
+			continue;
+		}
+		bool is_last = true;
+		for (uint j = i + 1; j < votes.length(); j++) {
+			if (int(j) != q.correct_index) {
+				is_last = false;
+				break;
+			}
+		}
+		if (is_last) {
+			votes[i] = total_votes;
+		} else {
+			int v = random(0, total_votes);
+			votes[i] = v;
+			total_votes -= v;
+		}
+	}
+	string result_text = "";
+	for (uint i = 0; i < q.options.length(); i++) {
+		result_text += "Option " + (i + 1) + " (" + q.options[i] + "): " + votes[i] + "%\r\n";
+	}
+	audio_form f;
+	f.create_window("Quizzy", false);
+	f.create_input_box("Poll Results", result_text, "", 0, true, true);
+	int ok_btn = f.create_button("OK", true, true);
+	f.focus(ok_btn);
+	while (true) {
+		wait(5);
+		touch_manager.monitor();
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
+		f.monitor();
+		if (f.is_pressed(ok_btn)) break;
+	}
+}

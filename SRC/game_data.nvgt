@@ -1,0 +1,17 @@
+class Question {
+	string question;
+	string[] options;
+	int correct_index;
+	Question(string q, string[] o, int c) {
+		this.question = q;
+		this.options = o;
+		this.correct_index = c;
+	}
+}
+
+Question@[] questions;
+Question@[] blitz_pool;
+mutex blitz_mutex;
+bool blitz_ready = false;
+bool blitz_fetching = false;
+async<void>@ blitz_fetch_handle;

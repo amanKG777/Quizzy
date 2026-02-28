@@ -1,0 +1,159 @@
+#if windows
+#pragma plugin graphics
+#endif
+
+#if_not windows
+class graphics_renderer {
+	bool setup(uint64 window_handle) { return false; }
+	int load_image(const string &in filename) { return -1; }
+	int load_font(const string &in filename, int size, bool bold, bool italic) { return -1; }
+	void draw_image(int id, int x, int y, int w, int h) {}
+	void draw_image_region(int id, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {}
+	void set_font(const string &in font_name, float size, bool bold, bool italic) {}
+	void draw_text(const string &in text, int x, int y, int r, int g, int b) {}
+	uint64 measure_text(const string &in text) { return 0; }
+	void draw_text_wrapped(const string &in text, int x, int y, int w, int r, int g, int b) {}
+	uint64 measure_text_wrapped(const string &in text, int w) { return 0; }
+	void clear_screen(int r, int g, int b) {}
+	void draw_rect(int x, int y, int w, int h, int r, int g, int b, bool filled) {}
+	void draw_circle(int x, int y, int radius, int r, int g, int b, bool filled) {}
+	void draw_line(int x1, int y1, int x2, int y2, int r, int g, int b, int thickness) {}
+	void draw_menu(const string &in items, int selected_index, int x, int y) {}
+	void present() {}
+	void select_font(int id) {}
+}
+#endif
+
+class graphics_manager {
+	graphics_renderer@ gfx;
+	bool initialized = false;
+	bool enabled = true;
+	bool high_contrast = false;
+	string current_font = "arial";
+	int font_id = -1;
+	int logo_id = -1;
+	graphics_manager() {
+		@gfx = graphics_renderer();
+	}
+	bool setup() {
+		if (initialized) return true;
+		if (gfx.setup(get_window_os_handle())) {
+			initialized = true;
+			update_font(current_font);
+			logo_id = gfx.load_image("LOGO.png");
+			return true;
+		}
+		return false;
+	}
+	void update_font(string font_name) {
+		if (!initialized || !enabled) return;
+		current_font = font_name;
+		if (font_name == "hindi") {
+			font_id = gfx.load_font("fonts/NotoSansDevanagari-Regular.ttf", 20, false, false);
+		} else {
+			font_id = gfx.load_font(font_name, 20, false, false);
+		}
+		if (font_id != -1) gfx.select_font(font_id);
+	}
+	void prepare_frame() {
+		if (!initialized || !enabled) return;
+		if (high_contrast)
+			gfx.clear_screen(0, 0, 0); 
+		else
+			gfx.clear_screen(0, 0, 50); 
+	}
+	void present_frame() {
+		if (!initialized || !enabled) return;
+		gfx.present();
+	}
+	void draw_logo() {
+		if (!initialized || !enabled) return;
+		gfx.clear_screen(10, 10, 15); 
+		if (logo_id != -1) {
+			gfx.draw_image(logo_id, 400 - 150, 250 - 150, 300, 300);
+		}
+	}
+	void draw_question(string question_text, string[] options, int selected_index) {
+		if (!initialized || !enabled) return;
+		gfx.draw_text_wrapped(question_text, 50, 50, 550, 255, 255, 255); 
+		int start_y = 200;
+		int line_height = 40;
+		for (uint i = 0; i < options.length(); i++) {
+			int r = 200, g = 200, b = 200;
+			if (int(i) == selected_index) {
+				r = 255; g = 255; b = 0; 
+				int rect_r = high_contrast ? 255 : 100;
+				int rect_g = high_contrast ? 255 : 100;
+				int rect_b = high_contrast ? 255 : 100;
+				gfx.draw_rect(40, start_y + i * line_height - 5, 540, line_height, rect_r, rect_g, rect_b, !high_contrast);
+				if (high_contrast) {
+					r = 0; g = 0; b = 0; 
+				}
+			}
+			gfx.draw_text(options[i], 60, start_y + i * line_height, r, g, b);
+		}
+	}
+	void draw_prize_ladder(int current_index, string[]@ prizes) {
+		if (!initialized || !enabled || @prizes == null) return;
+		int start_x = 600;
+		int start_y = 20;
+		int line_height = 28;
+		int num_prizes = int(prizes.length());
+		for (int i = num_prizes - 1; i >= 0; i--) {
+			int r = 180, g = 180, b = 180;
+			bool is_milestone = (i == 4 || i == 9 || i == 15);
+			if (is_milestone) { r = 255; g = 215; b = 0; } 
+			if (i == current_index) {
+				r = 255; g = 255; b = 255;
+				gfx.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0, true);
+			} else if (i < current_index) {
+				r = 100; g = 255; b = 100; 
+			}
+			gfx.draw_text((i + 1) + ": ₹" + prizes[i], start_x, start_y + (num_prizes - 1 - i) * line_height, r, g, b);
+		}
+	}
+	void draw_menu(menu@ m) {
+		if (!initialized || !enabled || @m == null) return;
+		string title = m.intro_text != "" ? m.intro_text : "Menu";
+		uint64 size = gfx.measure_text(title);
+		int w = size >> 32;
+		gfx.draw_text(title, 400 - (w / 2), 50, 255, 255, 255);
+		gfx.draw_line(100, 95, 700, 95, 150, 150, 255, 2);
+		string items_str = "";
+		for(int i=0; i<m.get_item_count(); i++) {
+			if (i > 0) items_str += "|";
+			items_str += m.get_item_text(i);
+		}
+		gfx.draw_menu(items_str, m.get_focused_item(), 400, 120);
+	}
+	void draw_form(audio_form@ f) {
+		if (!initialized || !enabled || @f == null) return;
+		int focused = f.get_current_focus();
+		int y = 60;
+		int startX = 50;
+		gfx.draw_text("Quizzy Form", 50, 20, 255, 255, 255);
+		gfx.draw_line(50, 50, 750, 50, 200, 200, 200, 1);
+		for(int i=0; i<f.get_control_count(); i++) {
+			if (!f.is_visible(i)) continue;
+			int type = f.get_control_type(i);
+			string cap = f.get_caption(i);
+			bool is_focused = (i == focused);
+			int r = is_focused ? 255 : 200;
+			int g = is_focused ? 255 : 200;
+			int b = is_focused ? 0 : 200;
+			if (type == 1) { cap = cap + ": " + f.get_text(i); }
+			else if (type == 2) { cap = (f.is_checked(i) ? "[X] " : "[ ] ") + cap; }
+			else if (type == 5) { 
+				int pos = f.get_list_position(i);
+				if (pos >= 0) cap += ": " + f.get_list_item(i, pos);
+				else cap += ": (None)";
+			}
+			else if (type == 6) { cap = cap + ": < " + f.get_slider(i) + " >"; }
+			gfx.draw_text(cap, startX, y, r, g, b);
+			if (is_focused) { gfx.draw_rect(startX - 15, y + 5, 10, 10, 255, 255, 0, true); }
+			y += 40;
+		}
+	}
+}
+
+graphics_manager gm;
