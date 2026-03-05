@@ -84,6 +84,7 @@ class updater {
 				string tag_name = "";
 				string body_text = "";
 				string download_url = "";
+				string api_download_url = "";
 				if (root.exists("tag_name")) tag_name = string(root["tag_name"]);
 				if (root.exists("body")) body_text = string(root["body"]);
 				
@@ -99,6 +100,7 @@ class updater {
 						json_object@ asset = assets.get_object(i);
 						if (string(asset["name"]) == target_file_name) {
 							download_url = string(asset["browser_download_url"]);
+							if (asset.exists("url")) api_download_url = string(asset["url"]);
 							break;
 						}
 					}
@@ -111,6 +113,7 @@ class updater {
 						string asset_name = string(asset["name"]);
 						if (asset_name == "Quizzy_Setup.exe" || asset_name == "Quizzy.zip" || asset_name == "Quizzy.apk") {
 							download_url = string(asset["browser_download_url"]);
+							if (asset.exists("url")) api_download_url = string(asset["url"]);
 							target_file_name = asset_name;
 							break;
 						}
@@ -144,7 +147,7 @@ class updater {
 					}
 					
 					if (do_download && download_url != "") {
-						download_and_install(download_url, target_file_name);
+						download_and_install(download_url, api_download_url, target_file_name, github_token);
 					}
 				} else {
 					if (!silent_on_no_update) speak("You are running the latest version.");
@@ -155,10 +158,17 @@ class updater {
 		}
 	}
 
-	void download_and_install(string download_url, string target_file_name) {
+	void download_and_install(string download_url, string api_download_url, string target_file_name, string github_token) {
 		#if windows
 		http downloader;
-		downloader.get(download_url);
+		name_value_collection download_headers;
+		download_headers.add("User-Agent", "Quizzy-Updater");
+		download_headers.add("Accept", "application/octet-stream");
+		if (github_token != "") {
+			download_headers.add("Authorization", "Bearer " + github_token);
+		}
+		string target_url = api_download_url != "" ? api_download_url : download_url;
+		downloader.get(target_url, download_headers);
 		
 		progress_window pw("Updating Quizzy", "Downloading " + target_file_name + "...");
 		int btn_cancel = pw.f.create_button("Cancel", false, true);
@@ -177,30 +187,33 @@ class updater {
 		if (downloader.status_code == 200) {
 			file f;
 			string download_path = DIRECTORY_TEMP + "/" + target_file_name;
+			if (target_file_name.ends_with(".zip")) {
+				download_path = cwdir() + "/" + target_file_name;
+			}
 			if (f.open(download_path, "wb")) {
 				f.write(downloader.response_body);
 				f.close();
 				
 				if (target_file_name.ends_with(".exe")) {
 					speak("Launching installer...", true);
-					run(download_path, "", false, false);
+					string current_exe = SCRIPT_EXECUTABLE;
+					string ps_script = "$exePath = '" + current_exe + "'; " +
+						"$ppid = (Get-WmiObject Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; " +
+						"Start-Sleep -Seconds 1; Wait-Process -Id $ppid -ErrorAction SilentlyContinue; " +
+						"Start-Process -FilePath '" + download_path + "' -ArgumentList '/silent' -Wait; " +
+						"Start-Process -FilePath $exePath";
+					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
 					exit();
 				} else if (target_file_name.ends_with(".zip")) {
 					speak("Extracting update...", true);
-					string current_exe = get_SCRIPT_MAIN_PATH();
-					string current_dir = cwdir();
-					string ps_script = "$exePath = '\" + current_exe + \"'; $downloadPath = '\" + download_path + \"'; $destPath = '\" + current_dir + \"'; " +
-						"$proc = Get-Process | Where-Object { try { $_.MainModule.FileName -eq $exePath } catch { $false } }; " +
-						"if ($proc) { $proc | Wait-Process }; " +
-						"Start-Sleep -s 1; " +
-						"for ($i=0; $i -lt 10; $i++) { " +
-						"  try { " +
-						"    Expand-Archive -Path $downloadPath -DestinationPath $destPath -Force; " +
-						"    Remove-Item -Path $downloadPath -Force; " +
-						"    Start-Process $exePath; " +
-						"    break; " +
-						"  } catch { Start-Sleep -s 1 } " +
-						"}";
+					string current_exe = SCRIPT_EXECUTABLE;
+					string ps_script = "$exePath = '" + current_exe + "'; " +
+						"$exeDir = Split-Path -Path $exePath -Parent; " +
+						"$ppid = (Get-WmiObject Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; " +
+						"Start-Sleep -Seconds 1; Wait-Process -Id $ppid -ErrorAction SilentlyContinue; " +
+						"Expand-Archive -Path '" + download_path + "' -DestinationPath $exeDir -Force; " +
+						"Remove-Item -Path '" + download_path + "' -Force; " +
+						"Start-Process -FilePath $exePath";
 					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
 					exit();
 				}
