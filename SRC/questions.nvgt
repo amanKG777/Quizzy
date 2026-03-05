@@ -7,12 +7,10 @@ progress_window@ global_pw = null;
 class TranslationCache {
 	dictionary cache;
 	string cache_file;
-
 	TranslationCache() {
 		cache_file = get_preferences_path("Boostof Studios", "Quizzy") + "/translation_cache.json";
 		load();
 	}
-
 	void load() {
 		if (!file_exists(cache_file)) return;
 		string content = file_get_contents(cache_file);
@@ -23,7 +21,6 @@ class TranslationCache {
 			cache.set(keys[i], string(root[keys[i]]));
 		}
 	}
-
 	void save() {
 		json_object@ root = json_object();
 		string[] keys = cache.get_keys();
@@ -34,14 +31,12 @@ class TranslationCache {
 		}
 		file_put_contents(cache_file, root.stringify(4));
 	}
-
 	string get(string text, string lang) {
 		string key = lang + ":" + text;
 		string val;
 		if (cache.get(key, val)) return val;
 		return "";
 	}
-
 	void set(string text, string lang, string translated) {
 		string key = lang + ":" + text;
 		cache.set(key, translated);
@@ -53,7 +48,6 @@ TranslationCache t_cache;
 string fetch_json_with_progress(string url, string action_text, int base_progress = 0, int weight = 0) {
 	http h;
 	h.get(url);
-	
 	bool created_pw = false;
 	if (@global_pw == null) {
 		@global_pw = progress_window("Fetching Questions", action_text);
@@ -61,9 +55,7 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 	} else {
 		global_pw.update(base_progress, action_text);
 	}
-	
 	int btn_cancel = global_pw.f.create_button("Cancel", false, true);
-	
 	while (!h.complete) {
 		wait(5);
 		touch_manager.monitor();
@@ -79,18 +71,15 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 			return "";
 		}
 	}
-	
 	if (created_pw) {
 		@global_pw = null;
 	}
-	
 	if (h.status_code == 200) return h.response_body;
 	return "";
 }
 
 void init_questions(string lang, int category_id = 0, int max_questions = 16, bool is_blitz = false) {
 	string source = config.read_string("question_source", "Random");
-	
 	if (!is_blitz) {
 		questions.resize(0);
 		@global_pw = progress_window("Quizzy", "Initializing questions...");
@@ -100,7 +89,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		blitz_pool.resize(0);
 		@global_pw = progress_window("Quizzy", "Fetching blitz questions...");
 	}
-
 	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
 	string download_file = download_dir + "cat_" + category_id + "_" + lang + ".json";
 	if (!is_blitz && load_questions_from_cache(download_file)) {
@@ -111,7 +99,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 			return; 
 		}
 	}
-
 	string[] difficulties = {"easy", "medium", "hard"};
 	int[] amounts;
 	if (is_blitz) {
@@ -119,9 +106,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	} else {
 		amounts = {5, 5, 6};
 	}
-
 	Question@[]@ target_arr = is_blitz ? @blitz_pool : @questions;
-
 	int total_steps = difficulties.length();
 	for (uint d = 0; d < difficulties.length(); d++) {
 		int base_p = int((float(d) / float(total_steps)) * 100);
@@ -130,7 +115,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		global_pw.update(base_p, action);
 		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, target_arr, source, base_p, weight);
 	}
-	
 	if (target_arr.length() < max_questions) {
 		global_pw.update(90, "Fetching additional questions...");
 		if (category_id != 0) {
@@ -140,7 +124,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 			fetch_questions_smart(max_questions - target_arr.length(), "", 0, lang, max_questions, target_arr, source, 95, 5);
 		}
 	}
-
 	if (is_blitz) {
 		if (target_arr.length() > max_questions) target_arr.resize(max_questions);
 		blitz_ready = true;
@@ -148,12 +131,10 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		@global_pw = null;
 		return;
 	}
-
 	bool online_success = (questions.length() >= max_questions);
 	string cache_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/offline_questions/";
 	if (!directory_exists(cache_dir)) directory_create(cache_dir);
 	string cache_file = cache_dir + "questions_" + lang + "_" + category_id + ".json";
-	
 	if (online_success) {
 		save_questions_to_cache(cache_file, questions);
 	} else if (questions.length() == 0) {
@@ -164,7 +145,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 			if (lang == "hi") init_hindi_questions(); else init_fallback_questions();
 		}
 	}
-	
 	if (questions.length() > max_questions) questions.resize(max_questions);
 	@global_pw = null;
 }
@@ -175,7 +155,7 @@ void fetch_questions_smart(int amount, string difficulty, int category_id, strin
 		fetch_from_api(amount, difficulty, category_id, lang, max_questions, target_arr, base_p, weight);
 	} else if (source == "TriviaAPI") {
 		fetch_from_trivia_api_v2(amount, difficulty, category_id, lang, max_questions, target_arr, base_p, weight);
-	} else { // Random/Mixed
+	} else { 
 		int opentdb_amount = amount / 2;
 		int trivia_amount = amount - opentdb_amount;
 		if (random(0, 1) == 0) {
@@ -192,9 +172,7 @@ void download_category(int category_id, string lang) {
 	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
 	if (!directory_exists(download_dir)) directory_create(download_dir);
 	string filename = download_dir + "cat_" + category_id + "_" + lang + ".json";
-	
 	@global_pw = progress_window("Downloader", "Starting download for offline play...");
-	
 	Question@[] download_pool;
 	string source = config.read_string("question_source", "Random");
 	int num_batches = 5;
@@ -205,9 +183,7 @@ void download_category(int category_id, string lang) {
 		fetch_questions_smart(20, "", category_id, lang, 100, @download_pool, source, base_p, weight);
 		wait(100); 
 	}
-	
 	@global_pw = null;
-	
 	if (download_pool.length() > 0) {
 		save_questions_to_cache(filename, download_pool);
 		alert("Quizzy", "Download complete! " + download_pool.length() + " questions saved for offline play.");
@@ -266,10 +242,8 @@ void fetch_from_api(int amount, string difficulty, int category_id, string lang,
 	string url = "https://opentdb.com/api.php?amount=" + amount + "&type=multiple";
 	if (difficulty != "") url += "&difficulty=" + difficulty;
 	if (category_id > 0) url += "&category=" + category_id;
-	
 	string response = fetch_json_with_progress(url, "Fetching from OpenTDB (" + difficulty + ")...", base_p, weight);
 	if (response.empty()) return;
-	
 	json_object@ root = parse_json(response);
 	if (@root == null) return;
 	int code = 0;
@@ -331,10 +305,8 @@ void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, st
 	string url = "https://the-trivia-api.com/v2/questions?limit=" + amount;
 	if (difficulty != "") url += "&difficulties=" + difficulty;
 	if (category_slug != "") url += "&categories=" + category_slug;
-	
 	string response = fetch_json_with_progress(url, "Fetching from TriviaAPI (" + difficulty + ")...", base_p, weight);
 	if (response.empty()) return;
-	
 	var@ v = parse_json(response);
 	json_array@ results = cast<json_array>(v);
 	if (@results == null) return;
@@ -373,7 +345,6 @@ void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, st
 string[] translate_bundle(string[]@ texts, string target_lang) {
 	string[] results;
 	if (texts.length() == 0) return results;
-	
 	bool all_cached = true;
 	string[] translated_batch;
 	for (uint i = 0; i < texts.length(); i++) {
@@ -385,34 +356,25 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 			break;
 		}
 	}
-	
 	if (all_cached) return translated_batch;
-
 	string joined = join(texts, "\n");
 	http h;
 	string url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" + target_lang + "&dt=t";
 	string post_data = "q=" + url_encode(joined);
-	
 	if (!h.post(url, post_data)) return texts;
-	
 	if (@global_pw != null) {
 		global_pw.update(global_pw.f.get_progress(global_pw.pb), "Translating to " + target_lang + "...");
 	}
-	
 	while (!h.complete) {
 		wait(5);
 		touch_manager.monitor();
-		// We don't have weight here easily without passing it, but let's just show some activity
 		if (@global_pw != null) {
 			int p = int(h.progress * 100);
-			// Don't overwrite the global progress too much, just show it moving
 		}
 	}
-	
 	if (h.status_code != 200) return texts;
 	json_array@ root = parse_json(h.response_body);
 	if (@root == null) return texts;
-	
 	string[] fresh_results;
 	if (root.size() > 0 && root.is_array(0)) {
 		json_array@ sentences = root.get_array(0);
@@ -425,7 +387,6 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 			}
 		}
 	}
-	
 	if (fresh_results.length() >= texts.length()) {
 		for (uint i = 0; i < texts.length(); i++) {
 			t_cache.set(texts[i], target_lang, fresh_results[i]);
@@ -433,7 +394,6 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 		t_cache.save();
 		return fresh_results;
 	}
-
 	if (fresh_results.length() < texts.length()) {
 		while (fresh_results.length() < texts.length()) {
 			fresh_results.insert_last(texts[fresh_results.length()]);

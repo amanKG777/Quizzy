@@ -31,15 +31,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "temp_extract\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "temp_extract\sounds.dat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "temp_extract\LOGO.png"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Quizzy\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Quizzy\sounds.dat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Quizzy\LOGO.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "lib\graphics.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "lib\notifications.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "lib\voice_command.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
-Source: "temp_extract\lib\nvdaControllerClient64.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
-Source: "temp_extract\lib\phonon.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
-Source: "temp_extract\lib\SAAPI64.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
+Source: "Quizzy\lib\nvdaControllerClient64.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
+Source: "Quizzy\lib\phonon.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
+Source: "Quizzy\lib\SAAPI64.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

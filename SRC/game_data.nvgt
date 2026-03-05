@@ -21,7 +21,6 @@ class GameState {
 	int current_question_index = 0;
 	string current_lang = "en";
 	int category_id = 0;
-
 	void reset() {
 		lifeline_5050 = true;
 		lifeline_phone = true;

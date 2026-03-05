@@ -8,7 +8,6 @@ class progress_window {
 	string title;
 	string action;
 	int last_spoken_percentage = 0;
-
 	progress_window(string title, string action) {
 		this.title = title;
 		this.action = action;
@@ -17,7 +16,6 @@ class progress_window {
 		pb = f.create_progress_bar("Progress", 1, true);
 		f.focus(lbl);
 	}
-
 	void update(int percentage, string new_action = "") {
 		if (new_action != "") {
 			this.action = new_action;
@@ -33,7 +31,6 @@ class progress_window {
 		}
 		show();
 	}
-
 	void show() {
 		wait(5);
 		touch_manager.monitor();
@@ -44,8 +41,6 @@ class progress_window {
 			gm.present_frame();
 		}
 	}
-	
 	void close() {
-		// Nothing special needed for audio_form usually, just stop calling show/update.
 	}
 }

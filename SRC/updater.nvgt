@@ -8,14 +8,12 @@ class updater {
 	string repo_owner;
 	string repo_name;
 	string update_url;
-	
 	updater(string current_version, string repo_owner, string repo_name) {
 		this.current_version = current_version;
 		this.repo_owner = repo_owner;
 		this.repo_name = repo_name;
 		this.update_url = "https://api.github.com/repos/" + repo_owner + "/" + repo_name + "/releases/latest";
 	}
-
 	bool is_version_newer(string current, string online) {
 		current = current.trim_whitespace();
 		online = online.trim_whitespace();
@@ -35,14 +33,12 @@ class updater {
 		}
 		return false;
 	}
-
 	bool is_installer_distribution() {
 		#if windows
 		return file_exists("unins000.exe");
 		#endif
 		return false;
 	}
-
 	void check_for_updates(bool silent_on_no_update) {
 		http update_req;
 		name_value_collection headers;
@@ -56,21 +52,15 @@ class updater {
 		if (github_token != "") {
 			headers.add("Authorization", "Bearer " + github_token);
 		}
-		
 		if (!silent_on_no_update) speak("Checking for updates...", false);
-		
 		update_req.get(update_url, headers);
-		
-		// Show a small progress window for checking
 		progress_window pw("Updater", "Checking for updates...");
-		
 		timer check_timer;
 		while (!update_req.complete && check_timer.elapsed < 10000) {
 			wait(5);
 			touch_manager.monitor();
 			pw.update(int(update_req.progress * 100));
 		}
-		
 		if (update_req.status_code == 200) {
 			string json_response = update_req.response_body;
 			json_object@ root = null;
@@ -87,13 +77,11 @@ class updater {
 				string api_download_url = "";
 				if (root.exists("tag_name")) tag_name = string(root["tag_name"]);
 				if (root.exists("body")) body_text = string(root["body"]);
-				
 				string target_file_name = "Quizzy.zip";
 				if (is_installer_distribution()) target_file_name = "Quizzy_Setup.exe";
 				#if android
 				target_file_name = "Quizzy.apk";
 				#endif
-				
 				if (root.exists("assets") && root.is_array("assets")) {
 					json_array@ assets = root.get_array("assets");
 					for(uint i=0; i<assets.size(); i++) {
@@ -105,7 +93,6 @@ class updater {
 						}
 					}
 				}
-				
 				if (download_url == "" && root.exists("assets") && root.is_array("assets")) {
 					json_array@ assets = root.get_array("assets");
 					for(uint i=0; i<assets.size(); i++) {
@@ -119,7 +106,6 @@ class updater {
 						}
 					}
 				}
-
 				if (is_version_newer(current_version, tag_name)) {
 					audio_form update_form;
 					update_form.create_window("Update Available", false, true);
@@ -127,7 +113,6 @@ class updater {
 					update_form.create_input_box("Update Information", info_text, "", 0, true, true);
 					int btn_download = update_form.create_button("Download &Update", true);
 					int btn_cancel = update_form.create_button("&Cancel", false, true);
-					
 					update_form.focus(btn_download);
 					bool do_download = false;
 					while(true) {
@@ -145,7 +130,6 @@ class updater {
 							break;
 						}
 					}
-					
 					if (do_download && download_url != "") {
 						download_and_install(download_url, api_download_url, target_file_name, github_token);
 					}
@@ -157,7 +141,6 @@ class updater {
 			if (!silent_on_no_update) speak("Failed to check for updates. Status code: " + update_req.status_code, false);
 		}
 	}
-
 	void download_and_install(string download_url, string api_download_url, string target_file_name, string github_token) {
 		#if windows
 		http downloader;
@@ -169,10 +152,8 @@ class updater {
 		}
 		string target_url = api_download_url != "" ? api_download_url : download_url;
 		downloader.get(target_url, download_headers);
-		
 		progress_window pw("Updating Quizzy", "Downloading " + target_file_name + "...");
 		int btn_cancel = pw.f.create_button("Cancel", false, true);
-		
 		while (!downloader.complete) {
 			wait(5);
 			touch_manager.monitor();
@@ -183,7 +164,6 @@ class updater {
 				return;
 			}
 		}
-		
 		if (downloader.status_code == 200) {
 			file f;
 			string download_path = DIRECTORY_TEMP + "/" + target_file_name;
@@ -193,7 +173,6 @@ class updater {
 			if (f.open(download_path, "wb")) {
 				f.write(downloader.response_body);
 				f.close();
-				
 				if (target_file_name.ends_with(".exe")) {
 					speak("Launching installer...", false);
 					string current_exe = SCRIPT_EXECUTABLE;
@@ -220,7 +199,6 @@ class updater {
 			speak("Download failed with status code: " + downloader.status_code, false);
 		}
 		#endif
-		
 		#if android
 		speak("Opening download link...", false);
 		wait(1000);

@@ -82,6 +82,13 @@ jobs:
               fs.writeFileSync('release_notes.txt', "Release " + context.ref.replace('refs/tags/', ''));
             }
 
+      - name: Update Version in Config
+        run: |
+          $ver = (Select-String -Path "SRC\quizzy.nvgt" -Pattern 'GAME_VERSION = "(.*?)"').Matches.Groups[1].Value
+          $content = Get-Content -Path "SRC\.nvgtrc"
+          $content = $content -replace "\[build\]", "[build]`nproduct_version = $ver`nproduct_version_semantic = $ver"
+          Set-Content -Path "SRC\.nvgtrc" -Value $content
+
       - name: Build Pack
         run: C:\nvgt\nvgt.exe -Q pack_creator.nvgt /s && Move-Item sounds.dat SRC/sounds.dat -Force
 
@@ -90,9 +97,6 @@ jobs:
 
       - name: Build Android
         run: C:\nvgt\nvgt.exe -Q SRC/quizzy.nvgt --compile-debug --platform=android
-
-      - name: Extract Windows Bundle for Installer
-        run: Expand-Archive -Path Quizzy.zip -DestinationPath temp_extract
 
       - name: Build Windows Installer
         run: iscc setup.iss /DAppVersion=${{ github.ref_name }}

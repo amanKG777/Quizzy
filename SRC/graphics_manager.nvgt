@@ -41,7 +41,6 @@ class Theme {
 	Color highlight_text;
 	Color milestone;
 	Color completed;
-	
 	Theme(Color bg, Color text, Color accent, Color highlight_bg, Color highlight_text, Color milestone, Color completed) {
 		this.bg = bg;
 		this.text = text;
@@ -61,18 +60,15 @@ class graphics_manager {
 	string current_font = "arial";
 	int font_id = -1;
 	int logo_id = -1;
-	
 	Theme@ classic_theme;
 	Theme@ hc_theme;
 	Theme@ current_theme;
-
 	graphics_manager() {
 		@gfx = graphics_renderer();
 		@classic_theme = Theme(Color(0, 0, 50), Color(255, 255, 255), Color(150, 150, 255), Color(100, 100, 100), Color(255, 255, 0), Color(255, 215, 0), Color(100, 255, 100));
 		@hc_theme = Theme(Color(0, 0, 0), Color(255, 255, 255), Color(255, 255, 255), Color(255, 255, 255), Color(0, 0, 0), Color(255, 255, 0), Color(0, 255, 0));
 		@current_theme = @classic_theme;
 	}
-
 	bool setup() {
 		if (initialized) return true;
 		if (gfx.setup(get_window_os_handle())) {
@@ -83,7 +79,6 @@ class graphics_manager {
 		}
 		return false;
 	}
-
 	void update_font(string font_name) {
 		if (!initialized || !enabled) return;
 		current_font = font_name;
@@ -95,18 +90,15 @@ class graphics_manager {
 		}
 		if (font_id != -1) gfx.select_font(font_id);
 	}
-
 	void prepare_frame() {
 		if (!initialized || !enabled) return;
 		@current_theme = high_contrast ? @hc_theme : @classic_theme;
 		gfx.clear_screen(current_theme.bg.r, current_theme.bg.g, current_theme.bg.b);
 	}
-
 	void present_frame() {
 		if (!initialized || !enabled) return;
 		gfx.present();
 	}
-
 	void draw_logo() {
 		if (!initialized || !enabled) return;
 		gfx.clear_screen(10, 10, 15); 
@@ -114,7 +106,6 @@ class graphics_manager {
 			gfx.draw_image(logo_id, 400 - 150, 300 - 150, 300, 300);
 		}
 	}
-
 	void draw_question(string question_text, string[] options, int selected_index) {
 		if (!initialized || !enabled) return;
 		gfx.draw_text_wrapped(question_text, 50, 50, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b); 
@@ -131,7 +122,6 @@ class graphics_manager {
 			gfx.draw_text(options[i], 60, start_y + i * line_height, r, g, b);
 		}
 	}
-
 	void draw_prize_ladder(int current_index, string[]@ prizes) {
 		if (!initialized || !enabled || @prizes == null) return;
 		int start_x = 600;
@@ -159,7 +149,6 @@ class graphics_manager {
 			gfx.draw_text((i + 1) + ": ₹" + prizes[i], start_x, start_y + (num_prizes - 1 - i) * line_height, r, g, b);
 		}
 	}
-
 	void draw_menu(menu@ m) {
 		if (!initialized || !enabled || @m == null) return;
 		string title = m.intro_text != "" ? m.intro_text : "Menu";
@@ -174,7 +163,6 @@ class graphics_manager {
 		}
 		gfx.draw_menu(items_str, m.get_focused_item(), 400, 120);
 	}
-
 	void draw_form(audio_form@ f) {
 		if (!initialized || !enabled || @f == null) return;
 		int focused = f.get_current_focus();
