@@ -303,7 +303,7 @@ void settings_menu() {
 				config.write_string("font_name", new_font);
 				gm.update_font(new_font);
 			}
-			speak("Settings saved.");
+			speak("Settings saved.", false);
 			break;
 		}
 		if (f.is_pressed(btn_cancel)) {
@@ -340,7 +340,7 @@ void select_font_menu() {
 			string font_name = m.selected_item_id;
 			config.write_string("font_name", font_name);
 			gm.update_font(font_name);
-			speak("Font changed to " + font_name);
+			speak("Font changed to " + font_name, false);
 			break;
 		}
 	}
@@ -503,7 +503,7 @@ void main_menu() {
 			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 			set_sound_master_volume(db);
 			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol);
+			speak("Volume " + master_vol, false);
 		}
 		if (key_pressed(KEY_PAGEDOWN)) {
 			master_vol -= 5;
@@ -511,13 +511,13 @@ void main_menu() {
 			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 			set_sound_master_volume(db);
 			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol);
+			speak("Volume " + master_vol, false);
 		}
 		if (key_pressed(KEY_F12)) {
 			string token = input_box("GitHub Token", "Paste your GitHub Personal Access Token here to enable updates for private repositories:");
 			if (token != "") {
 				file_put_contents("github_token.txt", token);
-				speak("Token saved.", true);
+				speak("Token saved.", false);
 				check_for_updates(false);
 			}
 		}
@@ -625,15 +625,15 @@ void game_loop() {
 		}
 		if (i < questions.length() - 1) {
 			if (state.current_lang == "hi") {
-				speak("प्रश्न " + (i + 2));
+				speak("प्रश्न " + (i + 2), false);
 			} else {
-				speak("Question " + (i + 2));
+				speak("Question " + (i + 2), false);
 			}
 		} else {
 			if (state.current_lang == "hi") {
-				speak("सही जवाब।");
+				speak("सही जवाब।", false);
 			} else {
-				speak("Correct answer.");
+				speak("Correct answer.", false);
 			}
 		}
 	}
@@ -720,7 +720,7 @@ bool play_question(Question@ q, int question_index) {
 				if (j == question_index) marker = " - CURRENT";
 				ladder += "Question " + (j + 1) + ": ₹" + prizes[j] + marker + ". ";
 			}
-			speak(ladder);
+			speak(ladder, false);
 		}
 		if (key_pressed(KEY_PAGEUP)) {
 			master_vol += 5;
@@ -728,7 +728,7 @@ bool play_question(Question@ q, int question_index) {
 			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 			set_sound_master_volume(db);
 			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol);
+			speak("Volume " + master_vol, false);
 		}
 		if (key_pressed(KEY_PAGEDOWN)) {
 			master_vol -= 5;
@@ -736,7 +736,7 @@ bool play_question(Question@ q, int question_index) {
 			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 			set_sound_master_volume(db);
 			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol);
+			speak("Volume " + master_vol, false);
 		}
 		if (key_pressed(KEY_F5) && !state.blitz_played) {
 			blitz_round();
@@ -925,9 +925,9 @@ void blitz_round() {
 					answered = true;
 					if (int(j) == q.correct_index) {
 						correct_count++;
-						speak("correct");
+						speak("correct", false);
 					} else {
-						speak("incorrect");
+						speak("incorrect", false);
 					}
 					break;
 				}
@@ -961,7 +961,7 @@ void blitz_round() {
 			string choice = m.selected_item_id;
 			if (choice == "money") {
 				state.bonus_money += (correct_count * 25000);
-				speak("Bonus money added!");
+				speak("Bonus money added!", false);
 				break;
 			} else if (choice == "lifeline") {
 				state.bonus_money += (correct_count * 25000); 
@@ -1015,7 +1015,7 @@ void retrieve_lifeline_menu() {
 			else if (choice == "expert") { state.lifeline_expert = true; name = "Ask an Expert"; }
 			if (name != "") {
 				alert("Quizzy", "The " + name + " lifeline is now available!");
-				speak("Lifeline retrieved!");
+				speak("Lifeline retrieved!", false);
 			}
 			break;
 		}

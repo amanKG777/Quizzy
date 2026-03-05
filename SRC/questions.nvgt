@@ -158,7 +158,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		save_questions_to_cache(cache_file, questions);
 	} else if (questions.length() == 0) {
 		if (load_questions_from_cache(cache_file)) {
-			speak(lang == "hi" ? "इंटरनेट उपलब्ध नहीं है। कैशे से प्रश्न लोड किए गए।" : "Internet unavailable. Loaded questions from cache.");
+			speak(lang == "hi" ? "इंटरनेट उपलब्ध नहीं है। कैशे से प्रश्न लोड किए गए।" : "Internet unavailable. Loaded questions from cache.", false);
 		} else {
 			alert("Quizzy", "Failed to fetch questions and no cache available. Using fallback questions.");
 			if (lang == "hi") init_hindi_questions(); else init_fallback_questions();

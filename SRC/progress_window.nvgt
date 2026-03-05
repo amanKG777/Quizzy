@@ -7,6 +7,7 @@ class progress_window {
 	int lbl = -1;
 	string title;
 	string action;
+	int last_spoken_percentage = 0;
 
 	progress_window(string title, string action) {
 		this.title = title;
@@ -23,6 +24,13 @@ class progress_window {
 			f.set_caption(lbl, new_action);
 		}
 		f.set_progress(pb, percentage);
+		if (percentage >= last_spoken_percentage + 5) {
+			int spoken_val = percentage - (percentage % 5);
+			if (spoken_val > last_spoken_percentage) {
+				speak(spoken_val + "%", false);
+				last_spoken_percentage = spoken_val;
+			}
+		}
 		show();
 	}
 

@@ -57,7 +57,7 @@ class updater {
 			headers.add("Authorization", "Bearer " + github_token);
 		}
 		
-		if (!silent_on_no_update) speak("Checking for updates...", true);
+		if (!silent_on_no_update) speak("Checking for updates...", false);
 		
 		update_req.get(update_url, headers);
 		
@@ -77,7 +77,7 @@ class updater {
 			try {
 				@root = parse_json(json_response);
 			} catch {
-				if (!silent_on_no_update) speak("Error parsing update information.");
+				if (!silent_on_no_update) speak("Error parsing update information.", false);
 				return;
 			}
 			if (@root != null) {
@@ -150,11 +150,11 @@ class updater {
 						download_and_install(download_url, api_download_url, target_file_name, github_token);
 					}
 				} else {
-					if (!silent_on_no_update) speak("You are running the latest version.");
+					if (!silent_on_no_update) speak("You are running the latest version.", false);
 				}
 			}
 		} else {
-			if (!silent_on_no_update) speak("Failed to check for updates. Status code: " + update_req.status_code);
+			if (!silent_on_no_update) speak("Failed to check for updates. Status code: " + update_req.status_code, false);
 		}
 	}
 
@@ -179,7 +179,7 @@ class updater {
 			pw.update(int(downloader.progress * 100));
 			if (pw.f.is_pressed(btn_cancel)) {
 				downloader.reset();
-				speak("Update cancelled.");
+				speak("Update cancelled.", false);
 				return;
 			}
 		}
@@ -195,7 +195,7 @@ class updater {
 				f.close();
 				
 				if (target_file_name.ends_with(".exe")) {
-					speak("Launching installer...", true);
+					speak("Launching installer...", false);
 					string current_exe = SCRIPT_EXECUTABLE;
 					uint64 pid = get_process_id();
 					string ps_script = "Start-Sleep -Seconds 1; Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; " +
@@ -204,7 +204,7 @@ class updater {
 					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
 					exit();
 				} else if (target_file_name.ends_with(".zip")) {
-					speak("Extracting update...", true);
+					speak("Extracting update...", false);
 					string current_exe = SCRIPT_EXECUTABLE;
 					uint64 pid = get_process_id();
 					string ps_script = "$exeDir = Split-Path -Path '" + current_exe + "' -Parent; " +
@@ -217,12 +217,12 @@ class updater {
 				}
 			}
 		} else {
-			speak("Download failed with status code: " + downloader.status_code);
+			speak("Download failed with status code: " + downloader.status_code, false);
 		}
 		#endif
 		
 		#if android
-		speak("Opening download link...", true);
+		speak("Opening download link...", false);
 		wait(1000);
 		urlopen(download_url);
 		exit();

@@ -131,14 +131,14 @@ void create_custom_pack_form(string filename = "") {
 				f.add_list_item(questions_list, (questions_arr.size()) + ": " + f.get_text(q_text));
 				clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
 				f.focus(q_text);
-				speak("Question added.");
+				speak("Question added.", false);
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
 		}
 		if (f.get_current_focus() == questions_list && enter_pressed) {
 			int pos = f.get_list_position(questions_list);
 			if (pos >= 0) {
-				speak("Question " + (pos + 1) + " selected. Tab to management options.");
+				speak("Question " + (pos + 1) + " selected. Tab to management options.", false);
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
 		}
@@ -147,14 +147,14 @@ void create_custom_pack_form(string filename = "") {
 			if (pos < 0) continue;
 			if (f.get_text(q_text) == "") {
 				load_question_to_fields(f, questions_arr.get_object(pos), q_text, opt1, opt2, opt3, opt4, correct);
-				speak("Question loaded into fields for editing.");
+				speak("Question loaded into fields for editing.", false);
 				f.focus(q_text);
 			} else {
 				if (validate_question_fields(f, q_text, opt1, opt2, opt3, opt4)) {
 					json_object@ q_obj = create_question_json(f, q_text, opt1, opt2, opt3, opt4, correct);
 					questions_arr[pos] = q_obj;
 					f.edit_list_item(questions_list, (pos + 1) + ": " + f.get_text(q_text), pos);
-					speak("Question updated.");
+					speak("Question updated.", false);
 					clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
 				}
 			}
@@ -164,7 +164,7 @@ void create_custom_pack_form(string filename = "") {
 			if (pos >= 0) {
 				questions_arr.remove(pos);
 				f.delete_list_item(questions_list, pos);
-				speak("Question removed.");
+				speak("Question removed.", false);
 				refresh_list_indices(f, questions_list, questions_arr);
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
@@ -219,7 +219,7 @@ void handle_move_item(audio_form& f, int list_id, json_array@ arr, int direction
 		arr[new_pos] = temp;
 		refresh_list_indices(f, list_id, arr);
 		f.set_list_position(list_id, new_pos);
-		speak(direction < 0 ? "Moved up." : "Moved down.");
+		speak(direction < 0 ? "Moved up." : "Moved down.", false);
 	}
 }
 

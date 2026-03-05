@@ -95,7 +95,7 @@ class stats_manager {
 			if (f.is_pressed(btn_reset)) {
 				if (question("Quizzy", "Are you sure you want to reset all statistics? This cannot be undone.") == 1) {
 					reset_all();
-					speak("Statistics reset.");
+					speak("Statistics reset.", false);
 					break;
 				}
 			}
