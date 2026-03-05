@@ -24,6 +24,35 @@ class graphics_renderer {
 }
 #endif
 
+class Color {
+	int r, g, b;
+	Color(int r=0, int g=0, int b=0) {
+		this.r = r;
+		this.g = g;
+		this.b = b;
+	}
+}
+
+class Theme {
+	Color bg;
+	Color text;
+	Color accent;
+	Color highlight_bg;
+	Color highlight_text;
+	Color milestone;
+	Color completed;
+	
+	Theme(Color bg, Color text, Color accent, Color highlight_bg, Color highlight_text, Color milestone, Color completed) {
+		this.bg = bg;
+		this.text = text;
+		this.accent = accent;
+		this.highlight_bg = highlight_bg;
+		this.highlight_text = highlight_text;
+		this.milestone = milestone;
+		this.completed = completed;
+	}
+}
+
 class graphics_manager {
 	graphics_renderer@ gfx;
 	bool initialized = false;
@@ -32,9 +61,18 @@ class graphics_manager {
 	string current_font = "arial";
 	int font_id = -1;
 	int logo_id = -1;
+	
+	Theme@ classic_theme;
+	Theme@ hc_theme;
+	Theme@ current_theme;
+
 	graphics_manager() {
 		@gfx = graphics_renderer();
+		@classic_theme = Theme(Color(0, 0, 50), Color(255, 255, 255), Color(150, 150, 255), Color(100, 100, 100), Color(255, 255, 0), Color(255, 215, 0), Color(100, 255, 100));
+		@hc_theme = Theme(Color(0, 0, 0), Color(255, 255, 255), Color(255, 255, 255), Color(255, 255, 255), Color(0, 0, 0), Color(255, 255, 0), Color(0, 255, 0));
+		@current_theme = @classic_theme;
 	}
+
 	bool setup() {
 		if (initialized) return true;
 		if (gfx.setup(get_window_os_handle())) {
@@ -45,54 +83,55 @@ class graphics_manager {
 		}
 		return false;
 	}
+
 	void update_font(string font_name) {
 		if (!initialized || !enabled) return;
 		current_font = font_name;
+		int size = 20;
 		if (font_name == "hindi") {
-			font_id = gfx.load_font("fonts/NotoSansDevanagari-Regular.ttf", 20, false, false);
+			font_id = gfx.load_font("fonts/NotoSansDevanagari-Regular.ttf", size, false, false);
 		} else {
-			font_id = gfx.load_font(font_name, 20, false, false);
+			font_id = gfx.load_font(font_name, size, false, false);
 		}
 		if (font_id != -1) gfx.select_font(font_id);
 	}
+
 	void prepare_frame() {
 		if (!initialized || !enabled) return;
-		if (high_contrast)
-			gfx.clear_screen(0, 0, 0); 
-		else
-			gfx.clear_screen(0, 0, 50); 
+		@current_theme = high_contrast ? @hc_theme : @classic_theme;
+		gfx.clear_screen(current_theme.bg.r, current_theme.bg.g, current_theme.bg.b);
 	}
+
 	void present_frame() {
 		if (!initialized || !enabled) return;
 		gfx.present();
 	}
+
 	void draw_logo() {
 		if (!initialized || !enabled) return;
 		gfx.clear_screen(10, 10, 15); 
 		if (logo_id != -1) {
-			gfx.draw_image(logo_id, 400 - 150, 250 - 150, 300, 300);
+			gfx.draw_image(logo_id, 400 - 150, 300 - 150, 300, 300);
 		}
 	}
+
 	void draw_question(string question_text, string[] options, int selected_index) {
 		if (!initialized || !enabled) return;
-		gfx.draw_text_wrapped(question_text, 50, 50, 550, 255, 255, 255); 
+		gfx.draw_text_wrapped(question_text, 50, 50, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b); 
 		int start_y = 200;
 		int line_height = 40;
 		for (uint i = 0; i < options.length(); i++) {
-			int r = 200, g = 200, b = 200;
+			int r = current_theme.text.r, g = current_theme.text.g, b = current_theme.text.b;
 			if (int(i) == selected_index) {
-				r = 255; g = 255; b = 0; 
-				int rect_r = high_contrast ? 255 : 100;
-				int rect_g = high_contrast ? 255 : 100;
-				int rect_b = high_contrast ? 255 : 100;
-				gfx.draw_rect(40, start_y + i * line_height - 5, 540, line_height, rect_r, rect_g, rect_b, !high_contrast);
-				if (high_contrast) {
-					r = 0; g = 0; b = 0; 
-				}
+				gfx.draw_rect(40, start_y + i * line_height - 5, 540, line_height, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
+				r = current_theme.highlight_text.r;
+				g = current_theme.highlight_text.g;
+				b = current_theme.highlight_text.b;
 			}
 			gfx.draw_text(options[i], 60, start_y + i * line_height, r, g, b);
 		}
 	}
+
 	void draw_prize_ladder(int current_index, string[]@ prizes) {
 		if (!initialized || !enabled || @prizes == null) return;
 		int start_x = 600;
@@ -100,25 +139,34 @@ class graphics_manager {
 		int line_height = 28;
 		int num_prizes = int(prizes.length());
 		for (int i = num_prizes - 1; i >= 0; i--) {
-			int r = 180, g = 180, b = 180;
+			int r = current_theme.text.r, g = current_theme.text.g, b = current_theme.text.b;
 			bool is_milestone = (i == 4 || i == 9 || i == 15);
-			if (is_milestone) { r = 255; g = 215; b = 0; } 
+			if (is_milestone) { 
+				r = current_theme.milestone.r; 
+				g = current_theme.milestone.g; 
+				b = current_theme.milestone.b; 
+			} 
 			if (i == current_index) {
-				r = 255; g = 255; b = 255;
+				r = current_theme.highlight_text.r;
+				g = current_theme.highlight_text.g;
+				b = current_theme.highlight_text.b;
 				gfx.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0, true);
 			} else if (i < current_index) {
-				r = 100; g = 255; b = 100; 
+				r = current_theme.completed.r;
+				g = current_theme.completed.g;
+				b = current_theme.completed.b;
 			}
 			gfx.draw_text((i + 1) + ": ₹" + prizes[i], start_x, start_y + (num_prizes - 1 - i) * line_height, r, g, b);
 		}
 	}
+
 	void draw_menu(menu@ m) {
 		if (!initialized || !enabled || @m == null) return;
 		string title = m.intro_text != "" ? m.intro_text : "Menu";
 		uint64 size = gfx.measure_text(title);
 		int w = size >> 32;
-		gfx.draw_text(title, 400 - (w / 2), 50, 255, 255, 255);
-		gfx.draw_line(100, 95, 700, 95, 150, 150, 255, 2);
+		gfx.draw_text(title, 400 - (w / 2), 50, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+		gfx.draw_line(100, 95, 700, 95, current_theme.accent.r, current_theme.accent.g, current_theme.accent.b, 2);
 		string items_str = "";
 		for(int i=0; i<m.get_item_count(); i++) {
 			if (i > 0) items_str += "|";
@@ -126,21 +174,22 @@ class graphics_manager {
 		}
 		gfx.draw_menu(items_str, m.get_focused_item(), 400, 120);
 	}
+
 	void draw_form(audio_form@ f) {
 		if (!initialized || !enabled || @f == null) return;
 		int focused = f.get_current_focus();
 		int y = 60;
 		int startX = 50;
-		gfx.draw_text("Quizzy Form", 50, 20, 255, 255, 255);
+		gfx.draw_text("Quizzy Form", 50, 20, current_theme.text.r, current_theme.text.g, current_theme.text.b);
 		gfx.draw_line(50, 50, 750, 50, 200, 200, 200, 1);
 		for(int i=0; i<f.get_control_count(); i++) {
 			if (!f.is_visible(i)) continue;
 			int type = f.get_control_type(i);
 			string cap = f.get_caption(i);
 			bool is_focused = (i == focused);
-			int r = is_focused ? 255 : 200;
-			int g = is_focused ? 255 : 200;
-			int b = is_focused ? 0 : 200;
+			int r = is_focused ? current_theme.highlight_text.r : current_theme.text.r;
+			int g = is_focused ? current_theme.highlight_text.g : current_theme.text.g;
+			int b = is_focused ? current_theme.highlight_text.b : current_theme.text.b;
 			if (type == 1) { cap = cap + ": " + f.get_text(i); }
 			else if (type == 2) { cap = (f.is_checked(i) ? "[X] " : "[ ] ") + cap; }
 			else if (type == 5) { 
@@ -150,7 +199,7 @@ class graphics_manager {
 			}
 			else if (type == 6) { cap = cap + ": < " + f.get_slider(i) + " >"; }
 			gfx.draw_text(cap, startX, y, r, g, b);
-			if (is_focused) { gfx.draw_rect(startX - 15, y + 5, 10, 10, 255, 255, 0, true); }
+			if (is_focused) { gfx.draw_rect(startX - 15, y + 5, 10, 10, r, g, b, true); }
 			y += 40;
 		}
 	}

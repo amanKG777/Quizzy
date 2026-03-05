@@ -2,182 +2,16 @@
 #pragma asset "LOGO.png"
 #include "menu.nvgt"
 #include "form.nvgt"
+#include "updater.nvgt"
 
 const string GAME_VERSION = "1.1.9";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
-const string UPDATE_API_URL = "https://api.github.com/repos/" + GITHUB_REPO_OWNER + "/" + GITHUB_REPO_NAME + "/releases/latest";
 
-bool is_version_newer(string current, string online) {
-	current = current.trim_whitespace();
-	online = online.trim_whitespace();
-	if (online.starts_with("v")) online = online.substr(1);
-	if (current == "") return false;
-	if (online == "") return false;
-	string[] curr_parts = current.split(".");
-	string[] online_parts = online.split(".");
-	uint max_len = (curr_parts.length() > online_parts.length()) ? curr_parts.length() : online_parts.length();
-	for(uint i=0; i<max_len; i++) {
-		int c_val = 0;
-		int o_val = 0;
-		if (i < curr_parts.length()) c_val = parse_int(curr_parts[i]);
-		if (i < online_parts.length()) o_val = parse_int(online_parts[i]);
-		if (o_val > c_val) return true;
-		if (o_val < c_val) return false;
-	}
-	return false;
-}
-
-bool is_installer_distribution() {
-	#if windows
-	return file_exists("unins000.exe");
-	#endif
-	return false;
-}
+updater game_updater(GAME_VERSION, GITHUB_REPO_OWNER, GITHUB_REPO_NAME);
 
 void check_for_updates(bool silent_on_no_update) {
-	http update_req;
-	name_value_collection headers;
-	headers.add("User-Agent", "Quizzy-Updater");
-	string github_token = ""; 
-	if (file_exists("github_token.txt")) {
-		github_token = file_get_contents("github_token.txt").trim_whitespace();
-	} else if (file_exists("SRC/github_token.txt")) {
-		github_token = file_get_contents("SRC/github_token.txt").trim_whitespace();
-	}
-	if (github_token != "") {
-		headers.add("Authorization", "Bearer " + github_token);
-	}
-	if (!silent_on_no_update) speak("Checking for updates...", true);
-	update_req.get(UPDATE_API_URL, headers);
-	timer check_timer;
-	while (!update_req.complete && check_timer.elapsed < 10000) {
-		wait(5);
-		touch_manager.monitor();
-	}
-	if (update_req.status_code == 200) {
-		string json_response = update_req.response_body;
-		json_object@ root = null;
-		try {
-			@root = parse_json(json_response);
-		} catch {
-			if (!silent_on_no_update) speak("Error parsing update information.");
-			return;
-		}
-		if (@root != null) {
-			string tag_name = "";
-			string body_text = "";
-			string download_url = "";
-			if (root.exists("tag_name")) tag_name = string(root["tag_name"]);
-			if (root.exists("body")) body_text = string(root["body"]);
-			string target_file_name = "Quizzy.zip";
-			if (is_installer_distribution()) target_file_name = "Quizzy_Setup.exe";
-			#if android
-			target_file_name = "Quizzy.apk";
-			#endif
-			if (root.exists("assets") && root.is_array("assets")) {
-				json_array@ assets = root.get_array("assets");
-				for(uint i=0; i<assets.size(); i++) {
-					json_object@ asset = assets.get_object(i);
-					if (string(asset["name"]) == target_file_name) {
-						download_url = string(asset["browser_download_url"]);
-						break;
-					}
-				}
-			}
-			if (download_url == "") {
-				if (root.exists("assets") && root.is_array("assets")) {
-					json_array@ assets = root.get_array("assets");
-					for(uint i=0; i<assets.size(); i++) {
-						json_object@ asset = assets.get_object(i);
-						string asset_name = string(asset["name"]);
-						if (asset_name == "Quizzy_Setup.exe" || asset_name == "Quizzy.zip" || asset_name == "Quizzy.apk") {
-							download_url = string(asset["browser_download_url"]);
-							target_file_name = asset_name;
-							break;
-						}
-					}
-				}
-			}
-			if (is_version_newer(GAME_VERSION, tag_name)) {
-				audio_form update_form;
-				update_form.create_window("Update Available", false, true);
-				string info_text = "A new version (" + tag_name + ") is available.\n\nChangelog:\n" + body_text;
-				int txt_info = update_form.create_input_box("Update Information", info_text, "", 0, true, true);
-				int btn_download = update_form.create_button("Download &Update", true);
-				int btn_cancel = update_form.create_button("&Cancel", false, true);
-				bool do_download = false;
-				update_form.focus(btn_download);
-				while(true) {
-					wait(5);
-					touch_manager.monitor();
-					update_form.monitor();
-					gm.prepare_frame();
-					gm.draw_form(update_form);
-					gm.present_frame();
-					if (update_form.is_pressed(btn_download)) {
-						do_download = true;
-						break;
-					}
-					if (update_form.is_pressed(btn_cancel) || key_pressed(KEY_ESCAPE)) {
-						break;
-					}
-				}
-				if (do_download && download_url != "") {
-					speak("Preparing update...", true);
-					#if windows
-					http downloader;
-					speak("Downloading update...", true);
-					downloader.get(download_url);
-					while (!downloader.complete) {
-						wait(100);
-					}
-					if (downloader.status_code == 200) {
-						file f;
-						string download_path = DIRECTORY_TEMP + target_file_name;
-						if (f.open(download_path, "wb")) {
-							f.write(downloader.response_body);
-							f.close();
-							if (target_file_name.ends_with(".exe")) {
-								speak("Launching installer...", true);
-								run(download_path, "", false, false);
-								exit();
-							} else if (target_file_name.ends_with(".zip")) {
-								speak("Extracting update...", true);
-								string current_exe = get_SCRIPT_MAIN_PATH();
-								string current_dir = cwdir();
-								string ps_script = "$exePath = '\" + current_exe + \"'; $downloadPath = '\" + download_path + \"'; $destPath = '\" + current_dir + \"'; " +
-									"$proc = Get-Process | Where-Object { try { $_.MainModule.FileName -eq $exePath } catch { $false } }; " +
-									"if ($proc) { $proc | Wait-Process }; " +
-									"Start-Sleep -s 1; " +
-									"for ($i=0; $i -lt 10; $i++) { " +
-									"  try { " +
-									"    Expand-Archive -Path $downloadPath -DestinationPath $destPath -Force; " +
-									"    Remove-Item -Path $downloadPath -Force; " +
-									"    Start-Process $exePath; " +
-									"    break; " +
-									"  } catch { Start-Sleep -s 1 } " +
-									"}";
-								run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
-								exit();
-							}
-						}
-					}
-					#endif
-					#if android
-					speak("Opening download link...", true);
-					wait(1000);
-					urlopen(download_url);
-					exit();
-					#endif
-				}
-			} else {
-				if (!silent_on_no_update) speak("You are running the latest version.");
-			}
-		}
-	} else {
-		if (!silent_on_no_update) speak("Failed to check for updates. Status code: " + update_req.status_code);
-	}
+	game_updater.check_for_updates(silent_on_no_update);
 }
 
 #include "sound_pool.nvgt"
@@ -192,23 +26,14 @@ void check_for_updates(bool silent_on_no_update) {
 touch_gesture_manager touch_manager;
 touch_keyboard_interface@ touch_keys;
 
-bool lifeline_5050 = true;
-bool lifeline_phone = true;
-bool lifeline_audience = true;
-bool lifeline_double_dip = true;
-bool lifeline_expert = true;
 bool menu_music_enabled = true;
 bool anticipation_enabled = true;
-int lifelines_used_count = 0;
-bool blitz_played = false;
-int bonus_money = 0;
 
 pack_file game_pack;
 sound bg_music;
 sound_pool pool;
 tts_voice voice;
 settings config;
-string current_lang = "en";
 string[] prizes = {"1,000", "2,000", "3,000", "5,000", "10,000", "20,000", "40,000", "80,000", "1,60,000", "3,20,000", "6,40,000", "12,50,000", "25,00,000", "50,00,000", "1,00,00,000", "7,00,00,000"};
 
 void play_sfx(string filename, bool wait_for_completion = false) {
@@ -581,12 +406,8 @@ void custom_pack_actions_menu(string filename) {
 			string choice = m.selected_item_id;
 			if (choice == "play") {
 				if (load_custom_questions(filename)) {
-					current_lang = "en";
-					lifeline_5050 = true;
-					lifeline_phone = true;
-					lifeline_audience = true;
-					lifeline_double_dip = true;
-					lifeline_expert = true;
+					state.reset();
+					state.current_lang = "en";
 					game_loop();
 					load_menu_music();
 				}
@@ -710,15 +531,9 @@ void main_menu() {
 					if (questions.length() == 0) {
 						alert("Quizzy", "No questions available to start the game.");
 					} else {
-						current_lang = lang;
-						lifeline_5050 = true;
-						lifeline_phone = true;
-						lifeline_audience = true;
-						lifeline_double_dip = true;
-						lifeline_expert = true;
-						lifelines_used_count = 0;
-						blitz_played = false;
-						bonus_money = 0;
+						state.reset();
+						state.current_lang = lang;
+						state.category_id = cat_id;
 						game_loop();
 						load_menu_music();
 					}
@@ -783,13 +598,14 @@ void game_loop() {
 	blitz_fetching = false;
 	blitz_pool.resize(0);
 	for (uint i = 0; i < questions.length(); i++) {
+		state.current_question_index = i;
 		if (!play_question(questions[i], i)) {
 			return;
 		}
-		if (!blitz_played && !blitz_fetching && !blitz_ready && (i >= 6 || lifelines_used_count >= 2)) {
-			init_questions(current_lang, 0, 20, true); 
+		if (!state.blitz_played && !blitz_fetching && !blitz_ready && (i >= 6 || state.lifelines_used_count >= 2)) {
+			init_questions(state.current_lang, 0, 20, true); 
 		}
-		if (!blitz_played && (i == 9 || lifelines_used_count >= 4)) {
+		if (!state.blitz_played && (i == 9 || state.lifelines_used_count >= 4)) {
 			string reason = (i == 9) ? "You have reached Question 10." : "You have used 4 or more lifelines.";
 			if (question("Quizzy", reason + " Would you like to take the blitz mode? If you don't take it now, you can press F5 while playing the game to take it later when you need it.") == 1) {
 				blitz_round();
@@ -801,13 +617,13 @@ void game_loop() {
 			play_sfx("SahiJawab2_15-02-26_15-12-00-471.mp3", true);
 		}
 		if (i < questions.length() - 1) {
-			if (current_lang == "hi") {
+			if (state.current_lang == "hi") {
 				speak("प्रश्न " + (i + 2));
 			} else {
 				speak("Question " + (i + 2));
 			}
 		} else {
-			if (current_lang == "hi") {
+			if (state.current_lang == "hi") {
 				speak("सही जवाब।");
 			} else {
 				speak("Correct answer.");
@@ -817,9 +633,9 @@ void game_loop() {
 	safe_stop(bg_music);
 	string total_prize_str = prizes[questions.length() - 1];
 	int base_prize = parse_int(total_prize_str.replace(",", ""));
-	int grand_total = base_prize + bonus_money;
-	if (bonus_money > 0) {
-		alert("Quizzy", "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!");
+	int grand_total = base_prize + state.bonus_money;
+	if (state.bonus_money > 0) {
+		alert("Quizzy", "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(state.bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!");
 	} else {
 		alert("Quizzy", "Congratulations! You have won the game and earned ₹" + total_prize_str + "!");
 	}
@@ -858,15 +674,15 @@ bool play_question(Question@ q, int question_index) {
 		option_buttons.insert_last(f.create_button(q.options[i]));
 	}
 	int btn_5050 = -1;
-	if (lifeline_5050) btn_5050 = f.create_button("Lifeline: 50-50");
+	if (state.lifeline_5050) btn_5050 = f.create_button("Lifeline: 50-50");
 	int btn_phone = -1;
-	if (lifeline_phone) btn_phone = f.create_button("Lifeline: Phone a Friend");
+	if (state.lifeline_phone) btn_phone = f.create_button("Lifeline: Phone a Friend");
 	int btn_audience = -1;
-	if (lifeline_audience) btn_audience = f.create_button("Lifeline: Ask the Audience");
+	if (state.lifeline_audience) btn_audience = f.create_button("Lifeline: Ask the Audience");
 	int btn_double = -1;
-	if (lifeline_double_dip) btn_double = f.create_button("Lifeline: Double Dip");
+	if (state.lifeline_double_dip) btn_double = f.create_button("Lifeline: Double Dip");
 	int btn_expert = -1;
-	if (lifeline_expert) btn_expert = f.create_button("Lifeline: Ask an Expert");
+	if (state.lifeline_expert) btn_expert = f.create_button("Lifeline: Ask an Expert");
 	int quit_btn = f.create_button("Quit Game", false, true);
 	f.focus(q_field);
 	bool double_dip_active = false;
@@ -914,7 +730,7 @@ bool play_question(Question@ q, int question_index) {
 			config.write_number("master_volume", master_vol);
 			speak("Volume " + master_vol);
 		}
-		if (key_pressed(KEY_F5) && !blitz_played) {
+		if (key_pressed(KEY_F5) && !state.blitz_played) {
 			blitz_round();
 			f.focus(q_field); 
 		}
@@ -994,8 +810,8 @@ bool play_question(Question@ q, int question_index) {
 			}
 		}
 		if (btn_5050 != -1 && f.is_pressed(btn_5050)) {
-			lifeline_5050 = false;
-			lifelines_used_count++;
+			state.lifeline_5050 = false;
+			state.lifelines_used_count++;
 			f.set_state(btn_5050, false, false);
 			int removed = 0;
 			for (uint i = 0; i < option_buttons.length() && removed < 2; i++) {
@@ -1007,8 +823,8 @@ bool play_question(Question@ q, int question_index) {
 			alert("50-50", "Two incorrect options have been removed.");
 		}
 		if (btn_phone != -1 && f.is_pressed(btn_phone)) {
-			lifeline_phone = false;
-			lifelines_used_count++;
+			state.lifeline_phone = false;
+			state.lifelines_used_count++;
 			f.set_state(btn_phone, false, false);
 			safe_stop(bg_music);
 			t.pause();
@@ -1018,8 +834,8 @@ bool play_question(Question@ q, int question_index) {
 			t.resume();
 		}
 		if (btn_audience != -1 && f.is_pressed(btn_audience)) {
-			lifeline_audience = false;
-			lifelines_used_count++;
+			state.lifeline_audience = false;
+			state.lifelines_used_count++;
 			f.set_state(btn_audience, false, false);
 			safe_stop(bg_music);
 			t.pause();
@@ -1029,15 +845,15 @@ bool play_question(Question@ q, int question_index) {
 			t.resume();
 		}
 		if (btn_double != -1 && f.is_pressed(btn_double)) {
-			lifeline_double_dip = false;
-			lifelines_used_count++;
+			state.lifeline_double_dip = false;
+			state.lifelines_used_count++;
 			f.set_state(btn_double, false, false);
 			double_dip_active = true;
 			alert("Double Dip", "Double Dip active! You can now make two guesses for this question.");
 		}
 		if (btn_expert != -1 && f.is_pressed(btn_expert)) {
-			lifeline_expert = false;
-			lifelines_used_count++;
+			state.lifeline_expert = false;
+			state.lifelines_used_count++;
 			f.set_state(btn_expert, false, false);
 			alert("Ask an Expert", "The expert says the correct answer is definitely: " + q.options[q.correct_index]);
 		}
@@ -1052,9 +868,9 @@ bool play_question(Question@ q, int question_index) {
 }
 
 void blitz_round() {
-	blitz_played = true;
+	state.blitz_played = true;
 	if (!blitz_ready) {
-		init_questions(current_lang, 0, 20, true);
+		init_questions(state.current_lang, 0, 20, true);
 	}
 	blitz_mutex.lock();
 	if (blitz_pool.length() == 0) {
@@ -1135,15 +951,15 @@ void blitz_round() {
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "money") {
-				bonus_money += (correct_count * 25000);
+				state.bonus_money += (correct_count * 25000);
 				speak("Bonus money added!");
 				break;
 			} else if (choice == "lifeline") {
-				bonus_money += (correct_count * 25000); 
+				state.bonus_money += (correct_count * 25000); 
 				retrieve_lifeline_menu();
 				break;
 			} else {
-				bonus_money += (correct_count * 25000);
+				state.bonus_money += (correct_count * 25000);
 				break;
 			}
 		}
@@ -1151,21 +967,21 @@ void blitz_round() {
 }
 
 void retrieve_lifeline_menu() {
-	if (bonus_money < 25000) {
+	if (state.bonus_money < 25000) {
 		alert("Quizzy", "You do not have enough bonus money (₹25,000 required) to retrieve a lifeline.");
 		return;
 	}
 	menu m;
-	if (!lifeline_5050) m.add_item("50-50", "5050");
-	if (!lifeline_phone) m.add_item("Phone a Friend", "phone");
-	if (!lifeline_audience) m.add_item("Ask the Audience", "audience");
-	if (!lifeline_double_dip) m.add_item("Double Dip", "double");
-	if (!lifeline_expert) m.add_item("Ask an Expert", "expert");
+	if (!state.lifeline_5050) m.add_item("50-50", "5050");
+	if (!state.lifeline_phone) m.add_item("Phone a Friend", "phone");
+	if (!state.lifeline_audience) m.add_item("Ask the Audience", "audience");
+	if (!state.lifeline_double_dip) m.add_item("Double Dip", "double");
+	if (!state.lifeline_expert) m.add_item("Ask an Expert", "expert");
 	if (m.get_item_count() == 0) {
 		alert("Quizzy", "All lifelines are already available.");
 		return;
 	}
-	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + bonus_money;
+	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + state.bonus_money;
 	m.click_sound = "item_move.mp3";
 	m.select_sound = "click.mp3";
 	m.edge_sound = "item_move.mp3";
@@ -1181,13 +997,13 @@ void retrieve_lifeline_menu() {
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "back" || choice == "") break;
-			bonus_money -= 25000;
+			state.bonus_money -= 25000;
 			string name = "";
-			if (choice == "5050") { lifeline_5050 = true; name = "50-50"; }
-			else if (choice == "phone") { lifeline_phone = true; name = "Phone a Friend"; }
-			else if (choice == "audience") { lifeline_audience = true; name = "Ask the Audience"; }
-			else if (choice == "double") { lifeline_double_dip = true; name = "Double Dip"; }
-			else if (choice == "expert") { lifeline_expert = true; name = "Ask an Expert"; }
+			if (choice == "5050") { state.lifeline_5050 = true; name = "50-50"; }
+			else if (choice == "phone") { state.lifeline_phone = true; name = "Phone a Friend"; }
+			else if (choice == "audience") { state.lifeline_audience = true; name = "Ask the Audience"; }
+			else if (choice == "double") { state.lifeline_double_dip = true; name = "Double Dip"; }
+			else if (choice == "expert") { state.lifeline_expert = true; name = "Ask an Expert"; }
 			if (name != "") {
 				alert("Quizzy", "The " + name + " lifeline is now available!");
 				speak("Lifeline retrieved!");

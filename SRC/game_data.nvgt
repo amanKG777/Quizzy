@@ -9,6 +9,34 @@ class Question {
 	}
 }
 
+class GameState {
+	bool lifeline_5050 = true;
+	bool lifeline_phone = true;
+	bool lifeline_audience = true;
+	bool lifeline_double_dip = true;
+	bool lifeline_expert = true;
+	int lifelines_used_count = 0;
+	bool blitz_played = false;
+	int bonus_money = 0;
+	int current_question_index = 0;
+	string current_lang = "en";
+	int category_id = 0;
+
+	void reset() {
+		lifeline_5050 = true;
+		lifeline_phone = true;
+		lifeline_audience = true;
+		lifeline_double_dip = true;
+		lifeline_expert = true;
+		lifelines_used_count = 0;
+		blitz_played = false;
+		bonus_money = 0;
+		current_question_index = 0;
+	}
+}
+
+GameState state;
+
 Question@[] questions;
 Question@[] blitz_pool;
 mutex blitz_mutex;
