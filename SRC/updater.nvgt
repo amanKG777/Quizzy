@@ -197,23 +197,21 @@ class updater {
 				if (target_file_name.ends_with(".exe")) {
 					speak("Launching installer...", true);
 					string current_exe = SCRIPT_EXECUTABLE;
-					string ps_script = "$exePath = '" + current_exe + "'; " +
-						"$ppid = (Get-WmiObject Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; " +
-						"Start-Sleep -Seconds 1; Wait-Process -Id $ppid -ErrorAction SilentlyContinue; " +
+					uint64 pid = get_process_id();
+					string ps_script = "Start-Sleep -Seconds 1; Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; " +
 						"Start-Process -FilePath '" + download_path + "' -ArgumentList '/silent' -Wait; " +
-						"Start-Process -FilePath $exePath";
+						"Start-Process -FilePath '" + current_exe + "'";
 					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
 					exit();
 				} else if (target_file_name.ends_with(".zip")) {
 					speak("Extracting update...", true);
 					string current_exe = SCRIPT_EXECUTABLE;
-					string ps_script = "$exePath = '" + current_exe + "'; " +
-						"$exeDir = Split-Path -Path $exePath -Parent; " +
-						"$ppid = (Get-WmiObject Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; " +
-						"Start-Sleep -Seconds 1; Wait-Process -Id $ppid -ErrorAction SilentlyContinue; " +
+					uint64 pid = get_process_id();
+					string ps_script = "$exeDir = Split-Path -Path '" + current_exe + "' -Parent; " +
+						"Start-Sleep -Seconds 1; Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; " +
 						"Expand-Archive -Path '" + download_path + "' -DestinationPath $exeDir -Force; " +
 						"Remove-Item -Path '" + download_path + "' -Force; " +
-						"Start-Process -FilePath $exePath";
+						"Start-Process -FilePath '" + current_exe + "'";
 					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
 					exit();
 				}
