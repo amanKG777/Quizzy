@@ -19,6 +19,7 @@ void check_for_updates(bool silent_on_no_update) {
 #include "settings.nvgt"
 #include "game_data.nvgt"
 #include "questions.nvgt"
+#include "stats_manager.nvgt"
 #include "pack_manager.nvgt"
 #include "graphics_manager.nvgt"
 #include "touch.nvgt"
@@ -476,6 +477,7 @@ void main_menu() {
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
 	m.add_item("Manage Custom Packs", "manage_custom");
+	m.add_item("Statistics", "stats");
 	m.add_item("Settings", "settings");
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
@@ -552,6 +554,8 @@ void main_menu() {
 			} else if (choice == "manage_custom") {
 				manage_custom_packs_menu();
 				main_menu_reset(m);
+			} else if (choice == "stats") {
+				stats.show_stats_menu();
 			} else if (choice == "settings") {
 				settings_menu();
 			} else if (choice == "credits") {
@@ -568,6 +572,7 @@ void main_menu_reset(menu@ m) {
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
 	m.add_item("Manage Custom Packs", "manage_custom");
+	m.add_item("Statistics", "stats");
 	m.add_item("Settings", "settings");
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
@@ -600,6 +605,8 @@ void game_loop() {
 	for (uint i = 0; i < questions.length(); i++) {
 		state.current_question_index = i;
 		if (!play_question(questions[i], i)) {
+			int current_prize = (i > 0) ? parse_int(prizes[i-1].replace(",", "")) : 0;
+			stats.record_game(current_prize, state.bonus_money, i, state.lifelines_used_count);
 			return;
 		}
 		if (!state.blitz_played && !blitz_fetching && !blitz_ready && (i >= 6 || state.lifelines_used_count >= 2)) {
@@ -634,6 +641,7 @@ void game_loop() {
 	string total_prize_str = prizes[questions.length() - 1];
 	int base_prize = parse_int(total_prize_str.replace(",", ""));
 	int grand_total = base_prize + state.bonus_money;
+	stats.record_game(base_prize, state.bonus_money, questions.length(), state.lifelines_used_count);
 	if (state.bonus_money > 0) {
 		alert("Quizzy", "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(state.bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!");
 	} else {
@@ -932,6 +940,7 @@ void blitz_round() {
 	safe_stop(bg_music);
 	bg_music.pitch = 100;
 	alert("Quizzy", "Blitz Over! You answered " + correct_count + " questions correctly!");
+	stats.record_blitz(correct_count);
 	menu m;
 	m.add_item("Claim Bonus Money (₹" + (correct_count * 25000) + ")", "money");
 	m.add_item("Retrieve a Lifeline (Cost: ₹25,000)", "lifeline");
