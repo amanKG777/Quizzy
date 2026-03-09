@@ -1,5 +1,21 @@
 #include "form.nvgt"
 
+int ask_yes_no(string title, string text) {
+	audio_form f;
+	f.create_window(title, false);
+	f.create_input_box("Message", text, "", 0, true, true);
+	int yes_btn = f.create_button("Yes", true);
+	int no_btn = f.create_button("No", false, true);
+	f.focus(yes_btn);
+	while (true) {
+		wait(5);
+		f.monitor();
+		if (f.is_pressed(yes_btn)) return 1;
+		if (f.is_pressed(no_btn)) return 2;
+	}
+	return 2;
+}
+
 class PackCreator {
 	pack_file pfile;
 	string filename;
@@ -12,7 +28,7 @@ class PackCreator {
 	void run() {
 		if (!silent) show_window("NVGT Pack Creator");
 		if (file_exists("pack.pk")) {
-			if (silent || question("Saved Data", "Would you like to use the existing saved data from pack.pk?") == 1) {
+			if (silent || ask_yes_no("Saved Data", "Would you like to use the existing saved data from pack.pk?") == 1) {
 				load_saved_data();
 			} else if (!silent) {
 				get_user_input();
@@ -38,7 +54,7 @@ class PackCreator {
 			return;
 		}
 		if (!silent) {
-			if (question("Start Packing", "Found " + files_to_pack.length() + " files. Start packing into " + filename + "?") != 1) {
+			if (ask_yes_no("Start Packing", "Found " + files_to_pack.length() + " files. Start packing into " + filename + "?") != 1) {
 				return;
 			}
 		}

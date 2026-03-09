@@ -81,7 +81,7 @@ class stats_manager {
 			gm.present_frame();
 			f.monitor();
 			if (f.is_pressed(btn_reset)) {
-				if (question("Quizzy", "Are you sure you want to reset all statistics? This cannot be undone.") == 1) {
+				if (ask_yes_no("Quizzy", "Are you sure you want to reset all statistics? This cannot be undone.") == 1) {
 					reset_all();
 					speak("Statistics reset.", false);
 					break;

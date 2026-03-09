@@ -193,7 +193,7 @@ void create_custom_pack_form(string filename = "") {
 			}
 		}
 		if (f.is_pressed(cancel_btn)) {
-			if (question("Quizzy", "Are you sure you want to cancel? All progress will be lost.") == 1) {
+			if (ask_yes_no("Quizzy", "Are you sure you want to cancel? All progress will be lost.") == 1) {
 				return;
 			}
 			f.focus(q_text);

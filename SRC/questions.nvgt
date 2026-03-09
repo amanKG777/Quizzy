@@ -86,8 +86,9 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	} else {
 		if (blitz_ready || blitz_fetching) return;
 		blitz_fetching = true;
+		blitz_mutex.lock();
 		blitz_pool.resize(0);
-		@global_pw = progress_window("Quizzy", "Fetching blitz questions...");
+		blitz_mutex.unlock();
 	}
 	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
 	string download_file = download_dir + "cat_" + category_id + "_" + lang + ".json";
@@ -106,28 +107,38 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	} else {
 		amounts = {5, 5, 6};
 	}
-	Question@[]@ target_arr = is_blitz ? @blitz_pool : @questions;
+	Question@[] target_temp;
 	int total_steps = difficulties.length();
 	for (uint d = 0; d < difficulties.length(); d++) {
 		int base_p = int((float(d) / float(total_steps)) * 100);
 		int weight = 100 / total_steps;
-		string action = (is_blitz ? "Blitz: " : "") + "Fetching " + difficulties[d] + " questions...";
-		global_pw.update(base_p, action);
-		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, target_arr, source, base_p, weight);
+		string action = "Fetching questions...";
+		if (@global_pw != null) global_pw.update(base_p, action);
+		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
 	}
-	if (target_arr.length() < max_questions) {
-		global_pw.update(90, "Fetching additional questions...");
+	if (!is_blitz && questions.length() < max_questions) {
+		if (@global_pw != null) global_pw.update(90, "Fetching additional questions...");
 		if (category_id != 0) {
-			fetch_questions_smart(max_questions - target_arr.length(), "", category_id, lang, max_questions, target_arr, source, 90, 5);
+			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 90, 5);
 		}
-		if (target_arr.length() < max_questions) {
-			fetch_questions_smart(max_questions - target_arr.length(), "", 0, lang, max_questions, target_arr, source, 95, 5);
+		if (questions.length() < max_questions) {
+			fetch_questions_smart(max_questions - questions.length(), "", 0, lang, max_questions, @questions, source, 95, 5);
+		}
+	} else if (is_blitz && target_temp.length() < max_questions) {
+		if (category_id != 0) {
+			fetch_questions_smart(max_questions - target_temp.length(), "", category_id, lang, max_questions, @target_temp, source, 90, 5);
+		}
+		if (target_temp.length() < max_questions) {
+			fetch_questions_smart(max_questions - target_temp.length(), "", 0, lang, max_questions, @target_temp, source, 95, 5);
 		}
 	}
 	if (is_blitz) {
-		if (target_arr.length() > max_questions) target_arr.resize(max_questions);
+		if (target_temp.length() > max_questions) target_temp.resize(max_questions);
+		blitz_mutex.lock();
+		blitz_pool = target_temp;
 		blitz_ready = true;
 		blitz_fetching = false;
+		blitz_mutex.unlock();
 		@global_pw = null;
 		return;
 	}
@@ -147,6 +158,10 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	}
 	if (questions.length() > max_questions) questions.resize(max_questions);
 	@global_pw = null;
+}
+
+void init_questions_bg(string lang, int category_id, int max_questions, bool is_blitz) {
+	init_questions(lang, category_id, max_questions, is_blitz);
 }
 
 void fetch_questions_smart(int amount, string difficulty, int category_id, string lang, int max_questions, Question@[]@ target_arr, string source, int base_p = 0, int weight = 0) {
@@ -242,7 +257,7 @@ void fetch_from_api(int amount, string difficulty, int category_id, string lang,
 	string url = "https://opentdb.com/api.php?amount=" + amount + "&type=multiple";
 	if (difficulty != "") url += "&difficulty=" + difficulty;
 	if (category_id > 0) url += "&category=" + category_id;
-	string response = fetch_json_with_progress(url, "Fetching from OpenTDB (" + difficulty + ")...", base_p, weight);
+	string response = fetch_json_with_progress(url, "Fetching questions...", base_p, weight);
 	if (response.empty()) return;
 	json_object@ root = parse_json(response);
 	if (@root == null) return;
