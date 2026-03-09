@@ -874,6 +874,17 @@ bool play_question(Question@ q, int question_index) {
 			}
 			speak(ladder, false);
 		}
+		if (key_pressed(KEY_S)) {
+			int lifelines_left = 0;
+			if (state.lifeline_5050) lifelines_left++;
+			if (state.lifeline_phone) lifelines_left++;
+			if (state.lifeline_audience) lifelines_left++;
+			if (state.lifeline_double_dip) lifelines_left++;
+			if (state.lifeline_expert) lifelines_left++;
+			string current_prize = (question_index > 0) ? prizes[question_index - 1] : "0";
+			string status = "Current Prize: ₹" + current_prize + ". Questions remaining: " + (questions.length() - question_index) + ". Lifelines left: " + lifelines_left + ".";
+			speak(status, false);
+		}
 		if (key_pressed(KEY_PAGEUP)) {
 			master_vol += 5;
 			if (master_vol > 100) master_vol = 100;
