@@ -652,7 +652,6 @@ void game_loop() {
 			@blitz_fetch_handle = async<void>(init_questions_bg, state.current_lang, 0, 20, true); 
 		}
 		if (!state.blitz_played && (i == 9 || state.lifelines_used_count >= 4)) {
-
 			string reason = (i == 9) ? "You have reached Question 10." : "You have used 4 or more lifelines.";
 			if (ask_yes_no("Quizzy", reason + " Would you like to take the blitz mode? If you don't take it now, you can press F5 while playing the game to take it later when you need it.") == 1) {
 				blitz_round();
@@ -754,9 +753,6 @@ bool handle_option_selection(Question@ q, int question_index, int i, int[]& opti
 		play_sfx("Kbc Galat Jawab.mp3");
 		alert("Wrong!", "That is incorrect, but you have Double Dip active! Try one more time.");
 		double_dip_active = false;
-		// We can't easily disable a button in audio_form once created without recreating the form, 
-		// but we can set its state to disabled if audio_form supports it.
-		// For now, we'll just continue.
 		if (question_index < 10) {
 			load_sound(bg_music, "clock-sound.mp3");
 			bg_music.volume = 0;
@@ -854,16 +850,12 @@ bool play_question(Question@ q, int question_index) {
 		if (key_pressed(KEY_B) && option_buttons.length() > 1) shortcut_selection = 1;
 		if (key_pressed(KEY_C) && option_buttons.length() > 2) shortcut_selection = 2;
 		if (key_pressed(KEY_D) && option_buttons.length() > 3) shortcut_selection = 3;
-		
 		if (shortcut_selection != -1) {
 			f.focus(option_buttons[shortcut_selection]);
-			// We'll let the next iteration handle the click or we can manually trigger it here.
-			// To make it "appear" immediately as requested:
 			if (handle_option_selection(q, question_index, shortcut_selection, option_buttons, double_dip_active, current_selection)) {
 				return true;
 			}
 		}
-
 		if (key_pressed(KEY_L)) {
 			string ladder = "Prize Ladder: ";
 			for (int j = int(prizes.length()) - 1; j >= 0; j--) {
