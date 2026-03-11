@@ -32,17 +32,14 @@ sound_pool pool;
 tts_voice voice;
 settings config;
 
+#include "global.nvgt"
+
 int ask_yes_no(string title, string text) {
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Yes", "1");
 	m.add_item("No", "2");
 	m.intro_text = text;
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
-	m.wrap = (config.read_string("menu_wrap", "false") == "true");
 	while (true) {
 		wait(5);
 		touch_manager.monitor();
@@ -116,19 +113,7 @@ void apply_orientation(string orient) {
 void main() {
 	config.setup("Boostof Studios", "Quizzy", false);
 	apply_orientation(config.read_string("orientation", "Auto"));
-	dictionary m;
-	m.set("double_tap1f", int[] = {KEY_RETURN, KEY_SPACE});
-	m.set("double_tap2f", KEY_ESCAPE);
-	m.set("swipe_up1f", KEY_UP);
-	m.set("swipe_down1f", KEY_DOWN);
-	m.set("swipe_left1f", int[] = {KEY_LSHIFT, KEY_TAB});
-	m.set("swipe_right1f", KEY_TAB);
-	m.set("swipe_left2f", KEY_LEFT);
-	m.set("swipe_right2f", KEY_RIGHT);
-	m.set("swipe_up2f", KEY_PAGEUP);
-	m.set("swipe_down2f", KEY_PAGEDOWN);
-	@touch_keys = touch_keyboard_interface(touch_manager, m);
-	touch_manager.add_touch_interface(touch_keys);
+	activateTouchControls();
 	int master_vol = int(config.read_number("master_volume", 100));
 	set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 	menu_music_enabled = (config.read_string("menu_music_enabled", "true") == "true");
@@ -178,16 +163,11 @@ void load_menu_music() {
 
 string select_language() {
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("English", "en");
 	m.add_item("Hindi", "hi");
 	m.add_item("Back", "back");
 	m.intro_text = "Select your preferred language.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
-	m.wrap = (config.read_string("menu_wrap", "false") == "true");
 	string lang = "en";
 	while (true) {
 		wait(5);
@@ -206,6 +186,7 @@ string select_language() {
 
 int select_category() {
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Random Categories", "0");
 	m.add_item("General Knowledge", "9");
 	m.add_item("Books", "10");
@@ -225,12 +206,6 @@ int select_category() {
 	m.add_item("Animals", "27");
 	m.add_item("Back", "back");
 	m.intro_text = "Select a category.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
-	m.wrap = (config.read_string("menu_wrap", "false") == "true");
 	int cat_id = 0;
 	while (true) {
 		wait(5);
@@ -351,51 +326,13 @@ void settings_menu() {
 	}
 }
 
-void select_font_menu() {
-	menu m;
-	m.add_item("Arial", "arial");
-	m.add_item("Verdana", "verdana");
-	m.add_item("Tahoma", "tahoma");
-	m.add_item("Georgia", "georgia");
-	m.add_item("Times New Roman", "times");
-	m.add_item("Comic Sans MS", "comic");
-	m.add_item("Hindi", "hindi");
-	m.add_item("Back", "back");
-	m.intro_text = "Select a font.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
-	m.wrap = (config.read_string("menu_wrap", "false") == "true");
-	while (true) {
-		wait(5);
-		touch_manager.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
-		if (!m.monitor()) {
-			if (m.selected_item_id == "back" || m.selected_item_id == "") return;
-			string font_name = m.selected_item_id;
-			config.write_string("font_name", font_name);
-			gm.update_font(font_name);
-			speak("Font changed to " + font_name, false);
-			break;
-		}
-	}
-}
-
 void manage_custom_packs_menu() {
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Play Custom Pack", "play");
 	m.add_item("Create Custom Pack", "create");
 	m.add_item("Back", "back");
 	m.intro_text = "Manage Custom Packs. Select an option.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
 	while (true) {
 		m.wrap = (config.read_string("menu_wrap", "false") == "true");
 		wait(5);
@@ -416,6 +353,7 @@ void manage_custom_packs_menu() {
 				break;
 			}
 			m.reset();
+			createDefaultMenu(m);
 			m.add_item("Play Custom Pack", "play");
 			m.add_item("Create Custom Pack", "create");
 			m.add_item("Back", "back");
@@ -425,16 +363,12 @@ void manage_custom_packs_menu() {
 
 void custom_pack_actions_menu(string filename) {
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Play", "play");
 	m.add_item("Edit", "edit");
 	m.add_item("Delete", "delete");
 	m.add_item("Back", "back");
 	m.intro_text = "Select an action for the pack: " + filename;
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
 	while (true) {
 		m.wrap = (config.read_string("menu_wrap", "false") == "true");
 		wait(5);
@@ -513,6 +447,7 @@ void show_credits() {
 void main_menu() {
 	load_menu_music();
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
 	m.add_item("Manage Custom Packs", "manage_custom");
@@ -521,13 +456,6 @@ void main_menu() {
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
 	m.intro_text = "Welcome to quizzy! Select an option.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.open_sound = "window_open.mp3";
-	m.close_sound = "window_close.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
 	int master_vol = int(config.read_number("master_volume", 100));
 	while (true) {
 		m.wrap = (config.read_string("menu_wrap", "false") == "true");
@@ -608,6 +536,7 @@ void main_menu() {
 
 void main_menu_reset(menu@ m) {
 	m.reset();
+	createDefaultMenu(m);
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
 	m.add_item("Manage Custom Packs", "manage_custom");
@@ -1050,14 +979,10 @@ void blitz_round() {
 	alert("Quizzy", "Blitz Over! You answered " + correct_count + " questions correctly!");
 	stats.record_blitz(correct_count);
 	menu m;
+	createDefaultMenu(m);
 	m.add_item("Claim Bonus Money (₹" + (correct_count * 25000) + ")", "money");
 	m.add_item("Retrieve a Lifeline (Cost: ₹25,000)", "lifeline");
 	m.intro_text = "Select your reward.";
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
 	while (true) {
 		m.wrap = (config.read_string("menu_wrap", "false") == "true");
 		wait(5);
@@ -1089,6 +1014,7 @@ void retrieve_lifeline_menu() {
 		return;
 	}
 	menu m;
+	createDefaultMenu(m);
 	if (!state.lifeline_5050) m.add_item("50-50", "5050");
 	if (!state.lifeline_phone) m.add_item("Phone a Friend", "phone");
 	if (!state.lifeline_audience) m.add_item("Ask the Audience", "audience");
@@ -1099,11 +1025,6 @@ void retrieve_lifeline_menu() {
 		return;
 	}
 	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + state.bonus_money;
-	m.click_sound = "item_move.mp3";
-	m.select_sound = "click.mp3";
-	m.edge_sound = "item_move.mp3";
-	m.wrap_sound = "item_move.mp3";
-	m.focus_first_item = true;
 	while (true) {
 		m.wrap = (config.read_string("menu_wrap", "false") == "true");
 		wait(5);

@@ -111,8 +111,8 @@ class updater {
 					update_form.create_window("Update Available", false, true);
 					string info_text = "A new version (" + tag_name + ") is available.\n\nChangelog:\n" + body_text;
 					update_form.create_input_box("Update Information", info_text, "", 0, true, true);
-					int btn_download = update_form.create_button("Download &Update", true);
-					int btn_cancel = update_form.create_button("&Cancel", false, true);
+					int btn_download = update_form.create_button("Download Update", true);
+					int btn_cancel = update_form.create_button("Cancel", false, true);
 					update_form.focus(btn_download);
 					bool do_download = false;
 					while(true) {

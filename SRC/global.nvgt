@@ -1,0 +1,36 @@
+void createDefaultMenu(menu& m) {
+	m.click_sound = "item_move.mp3";
+	m.select_sound = "click.mp3";
+	m.edge_sound = "item_move.mp3";
+	m.wrap_sound = "item_move.mp3";
+	m.open_sound = "window_open.mp3";
+	m.close_sound = "window_close.mp3";
+	m.focus_first_item = true;
+	m.wrap = (config.read_string("menu_wrap", "false") == "true");
+}
+
+void activateTouchControls() {
+	if (@touch_keys != null) return;
+	dictionary m;
+	m.set("double_tap1f", int[] = {KEY_RETURN, KEY_SPACE});
+	m.set("double_tap2f", KEY_ESCAPE);
+	m.set("swipe_up1f", KEY_UP);
+	m.set("swipe_down1f", KEY_DOWN);
+	m.set("swipe_left1f", int[] = {KEY_LSHIFT, KEY_TAB});
+	m.set("swipe_right1f", KEY_TAB);
+	m.set("swipe_left2f", KEY_LEFT);
+	m.set("swipe_right2f", KEY_RIGHT);
+	m.set("swipe_up2f", KEY_PAGEUP);
+	m.set("swipe_down2f", KEY_PAGEDOWN);
+	@touch_keys = touch_keyboard_interface(touch_manager, m);
+	touch_manager.add_touch_interface(touch_keys);
+}
+
+void deactivateTouchControls() {
+	if (@touch_keys == null) return;
+	int idx = touch_manager.interfaces.find(touch_keys);
+	if (idx >= 0) {
+		touch_manager.interfaces.remove_at(idx);
+	}
+	@touch_keys = null;
+}
