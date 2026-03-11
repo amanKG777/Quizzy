@@ -1,0 +1,18 @@
+#include "input_manager.nvgt"
+
+class AppContext {
+	InputManager input;
+	touch_gesture_manager touch;
+	touch_keyboard_interface@ touch_keys;
+	bool menu_music_enabled = true;
+	bool anticipation_enabled = true;
+	bool option_locking_sound_enabled = true;
+	bool manual_next_question = false;
+	pack_file game_pack;
+	sound bg_music;
+	sound_pool pool;
+	tts_voice voice;
+	settings config;
+}
+
+AppContext app;

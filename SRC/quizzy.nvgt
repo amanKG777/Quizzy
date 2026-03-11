@@ -18,20 +18,8 @@ void check_for_updates(bool silent_on_no_update) {
 #include "touch.nvgt"
 #include "settings.nvgt"
 
-touch_gesture_manager touch_manager;
-touch_keyboard_interface@ touch_keys;
-
-bool menu_music_enabled = true;
-bool anticipation_enabled = true;
-bool option_locking_sound_enabled = true;
-bool manual_next_question = false;
-
-pack_file game_pack;
-sound bg_music;
-sound_pool pool;
-tts_voice voice;
-settings config;
-
+#include "app_context.nvgt"
+#include "quiz_logic.nvgt"
 #include "global.nvgt"
 
 int ask_yes_no(string title, string text) {
@@ -42,7 +30,7 @@ int ask_yes_no(string title, string text) {
 	m.intro_text = text;
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -58,6 +46,7 @@ int ask_yes_no(string title, string text) {
 #include "speech.nvgt"
 #include "game_data.nvgt"
 #include "questions.nvgt"
+#include "play_question_scene.nvgt"
 #include "stats_manager.nvgt"
 #include "pack_manager.nvgt"
 
@@ -71,7 +60,7 @@ void play_sfx(string filename, bool wait_for_completion = false) {
 			s.play();
 			while (s.playing) {
 				wait(5);
-				touch_manager.monitor();
+				app.touch.monitor();
 				if (gm.initialized) {
 					gm.prepare_frame();
 					gm.draw_logo();
@@ -79,19 +68,19 @@ void play_sfx(string filename, bool wait_for_completion = false) {
 				}
 			}
 		} else {
-			if (@pool == null) return;
-			int slot = pool.play_stationary(filename, false);
-			if (slot < 0) slot = pool.play_stationary("sounds/" + filename, false);
+			if (@app.pool == null) return;
+			int slot = app.pool.play_stationary(filename, false);
+			if (slot < 0) slot = app.pool.play_stationary("sounds/" + filename, false);
 			if (slot >= 0) {
-				pool.update_sound_start_values(slot, 0, 0, 100); 
+				app.pool.update_sound_start_values(slot, 0, 0, 100); 
 			}
 		}
 	} else {
-		if (@pool == null) return;
-		int slot = pool.play_stationary(filename, false);
-		if (slot < 0) slot = pool.play_stationary("sounds/" + filename, false);
+		if (@app.pool == null) return;
+		int slot = app.pool.play_stationary(filename, false);
+		if (slot < 0) slot = app.pool.play_stationary("sounds/" + filename, false);
 		if (slot >= 0) {
-			pool.update_sound_start_values(slot, 0, 0, 100); 
+			app.pool.update_sound_start_values(slot, 0, 0, 100); 
 		}
 	}
 }
@@ -110,26 +99,48 @@ void apply_orientation(string orient) {
 	sdl_set_hint("SDL_HINT_ORIENTATIONS", value);
 }
 
+void vol_up() {
+	int master_vol = int(app.config.read_number("master_volume", 100));
+	master_vol += 5;
+	if (master_vol > 100) master_vol = 100;
+	float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+	set_sound_master_volume(db);
+	app.config.write_number("master_volume", master_vol);
+	speak("Volume " + master_vol, false);
+}
+
+void vol_down() {
+	int master_vol = int(app.config.read_number("master_volume", 100));
+	master_vol -= 5;
+	if (master_vol < 0) master_vol = 0;
+	float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
+	set_sound_master_volume(db);
+	app.config.write_number("master_volume", master_vol);
+	speak("Volume " + master_vol, false);
+}
+
 void main() {
-	config.setup("Boostof Studios", "Quizzy", false);
-	apply_orientation(config.read_string("orientation", "Auto"));
+	app.input.register_global(KEY_PAGEUP, vol_up);
+	app.input.register_global(KEY_PAGEDOWN, vol_down);
+	app.config.setup("Boostof Studios", "Quizzy", false);
+	apply_orientation(app.config.read_string("orientation", "Auto"));
 	activateTouchControls();
-	int master_vol = int(config.read_number("master_volume", 100));
+	int master_vol = int(app.config.read_number("master_volume", 100));
 	set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-	menu_music_enabled = (config.read_string("menu_music_enabled", "true") == "true");
-	anticipation_enabled = (config.read_string("anticipation_enabled", "true") == "true");
-	option_locking_sound_enabled = (config.read_string("option_locking_sound_enabled", "true") == "true");
-	manual_next_question = (config.read_string("manual_next_question", "false") == "true");
-	if (game_pack.open("soundsd.dat") || game_pack.open("SRC/soundsd.dat") || game_pack.open("sounds.dat") || game_pack.open("SRC/sounds.dat")) {
-		@sound_default_pack = @game_pack;
+	app.menu_music_enabled = (app.config.read_string("menu_music_enabled", "true") == "true");
+	app.anticipation_enabled = (app.config.read_string("anticipation_enabled", "true") == "true");
+	app.option_locking_sound_enabled = (app.config.read_string("option_locking_sound_enabled", "true") == "true");
+	app.manual_next_question = (app.config.read_string("manual_next_question", "false") == "true");
+	if (app.game_pack.open("soundsd.dat") || app.game_pack.open("SRC/soundsd.dat") || app.game_pack.open("sounds.dat") || app.game_pack.open("SRC/sounds.dat")) {
+		@sound_default_pack = @app.game_pack;
 	}
-	string play_intro = config.read_string("play_startup_sound", "true");
+	string play_intro = app.config.read_string("play_startup_sound", "true");
 	show_window("Quizzy");
 	gm.setup();
-	gm.enabled = (config.read_string("visuals_enabled", "true") == "true");
-	gm.high_contrast = (config.read_string("high_contrast", "false") == "true");
-	gm.update_font(config.read_string("font_name", "arial"));
-	if (config.read_string("update_on_startup", "true") == "true") {
+	gm.enabled = (app.config.read_string("visuals_enabled", "true") == "true");
+	gm.high_contrast = (app.config.read_string("high_contrast", "false") == "true");
+	gm.update_font(app.config.read_string("font_name", "arial"));
+	if (app.config.read_string("update_on_startup", "true") == "true") {
 		check_for_updates(true);
 	}
 	if (play_intro == "true") {
@@ -140,7 +151,7 @@ void main() {
 			timer intro_timer;
 			while (intro_timer.elapsed < 22000) {
 				wait(5);
-				touch_manager.monitor();
+				app.touch.monitor();
 				gm.draw_logo();
 				gm.present_frame();
 				if (key_pressed(KEY_RETURN)) {
@@ -154,11 +165,11 @@ void main() {
 }
 
 void load_menu_music() {
-	if (!menu_music_enabled) return;
-	safe_stop(bg_music);
-	if (!load_sound(bg_music, "MenuMusic.mp3") && !load_sound(bg_music, "menuMusic.mp3")) return;
-	bg_music.volume = 0;
-	bg_music.play_looped();
+	if (!app.menu_music_enabled) return;
+	safe_stop(app.bg_music);
+	if (!load_sound(app.bg_music, "MenuMusic.mp3") && !load_sound(app.bg_music, "menuMusic.mp3")) return;
+	app.bg_music.volume = 0;
+	app.bg_music.play_looped();
 }
 
 string select_language() {
@@ -171,7 +182,7 @@ string select_language() {
 	string lang = "en";
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -209,7 +220,7 @@ int select_category() {
 	int cat_id = 0;
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -223,18 +234,18 @@ int select_category() {
 }
 
 void settings_menu() {
-	string startup_setting = config.read_string("play_startup_sound", "true");
-	string wrap_setting = config.read_string("menu_wrap", "false");
-	string visuals_setting = config.read_string("visuals_enabled", "true");
-	string contrast_setting = config.read_string("high_contrast", "false");
-	string menu_music_setting = config.read_string("menu_music_enabled", "true");
-	string anticipation_setting = config.read_string("anticipation_enabled", "true");
-	string font_setting = config.read_string("font_name", "arial");
-	string orientation_setting = config.read_string("orientation", "Auto");
-	string source_setting = config.read_string("question_source", "Random");
-	string update_on_startup_setting = config.read_string("update_on_startup", "true");
-	string locking_setting = config.read_string("option_locking_sound_enabled", "true");
-	string next_setting = config.read_string("manual_next_question", "false");
+	string startup_setting = app.config.read_string("play_startup_sound", "true");
+	string wrap_setting = app.config.read_string("menu_wrap", "false");
+	string visuals_setting = app.config.read_string("visuals_enabled", "true");
+	string contrast_setting = app.config.read_string("high_contrast", "false");
+	string menu_music_setting = app.config.read_string("menu_music_enabled", "true");
+	string anticipation_setting = app.config.read_string("anticipation_enabled", "true");
+	string font_setting = app.config.read_string("font_name", "arial");
+	string orientation_setting = app.config.read_string("orientation", "Auto");
+	string source_setting = app.config.read_string("question_source", "Random");
+	string update_on_startup_setting = app.config.read_string("update_on_startup", "true");
+	string locking_setting = app.config.read_string("option_locking_sound_enabled", "true");
+	string next_setting = app.config.read_string("manual_next_question", "false");
 	audio_form f;
 	f.create_window("Settings", false, true);
 	int chk_startup = f.create_checkbox("Enable Startup Intro", startup_setting == "true");
@@ -271,7 +282,7 @@ void settings_menu() {
 	f.focus(chk_startup);
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();
@@ -280,41 +291,41 @@ void settings_menu() {
 			check_for_updates(false);
 		}
 		if (f.is_pressed(btn_save)) {
-			config.write_string("play_startup_sound", f.is_checked(chk_startup) ? "true" : "false");
-			config.write_string("update_on_startup", f.is_checked(chk_update_startup) ? "true" : "false");
-			config.write_string("menu_wrap", f.is_checked(chk_wrap) ? "true" : "false");
+			app.config.write_string("play_startup_sound", f.is_checked(chk_startup) ? "true" : "false");
+			app.config.write_string("update_on_startup", f.is_checked(chk_update_startup) ? "true" : "false");
+			app.config.write_string("menu_wrap", f.is_checked(chk_wrap) ? "true" : "false");
 			bool v_enabled = f.is_checked(chk_visuals);
-			config.write_string("visuals_enabled", v_enabled ? "true" : "false");
+			app.config.write_string("visuals_enabled", v_enabled ? "true" : "false");
 			gm.enabled = v_enabled;
 			bool h_contrast = f.is_checked(chk_contrast);
-			config.write_string("high_contrast", h_contrast ? "true" : "false");
+			app.config.write_string("high_contrast", h_contrast ? "true" : "false");
 			gm.high_contrast = h_contrast;
-			menu_music_enabled = f.is_checked(chk_music);
-			config.write_string("menu_music_enabled", menu_music_enabled ? "true" : "false");
-			if (!menu_music_enabled) safe_stop(bg_music);
-			else if (!bg_music.playing) {
+			app.menu_music_enabled = f.is_checked(chk_music);
+			app.config.write_string("menu_music_enabled", app.menu_music_enabled ? "true" : "false");
+			if (!app.menu_music_enabled) safe_stop(app.bg_music);
+			else if (!app.bg_music.playing) {
 				load_menu_music();
 			}
-			anticipation_enabled = f.is_checked(chk_anticipation);
-			config.write_string("anticipation_enabled", anticipation_enabled ? "true" : "false");
-			option_locking_sound_enabled = f.is_checked(chk_locking);
-			config.write_string("option_locking_sound_enabled", option_locking_sound_enabled ? "true" : "false");
-			manual_next_question = f.is_checked(chk_next);
-			config.write_string("manual_next_question", manual_next_question ? "true" : "false");
+			app.anticipation_enabled = f.is_checked(chk_anticipation);
+			app.config.write_string("anticipation_enabled", app.anticipation_enabled ? "true" : "false");
+			app.option_locking_sound_enabled = f.is_checked(chk_locking);
+			app.config.write_string("option_locking_sound_enabled", app.option_locking_sound_enabled ? "true" : "false");
+			app.manual_next_question = f.is_checked(chk_next);
+			app.config.write_string("manual_next_question", app.manual_next_question ? "true" : "false");
 			int source_pos = f.get_list_position(list_source);
 			if (source_pos >= 0) {
-				config.write_string("question_source", sources[source_pos]);
+				app.config.write_string("question_source", sources[source_pos]);
 			}
 			int orient_pos = f.get_list_position(list_orientation);
 			if (orient_pos >= 0) {
 				string new_orient = orientations[orient_pos];
-				config.write_string("orientation", new_orient);
+				app.config.write_string("orientation", new_orient);
 				apply_orientation(new_orient);
 			}
 			int font_pos = f.get_list_position(list_font);
 			if (font_pos >= 0) {
 				string new_font = fonts[font_pos];
-				config.write_string("font_name", new_font);
+				app.config.write_string("font_name", new_font);
 				gm.update_font(new_font);
 			}
 			speak("Settings saved.", false);
@@ -334,9 +345,9 @@ void manage_custom_packs_menu() {
 	m.add_item("Back", "back");
 	m.intro_text = "Manage Custom Packs. Select an option.";
 	while (true) {
-		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -370,9 +381,9 @@ void custom_pack_actions_menu(string filename) {
 	m.add_item("Back", "back");
 	m.intro_text = "Select an action for the pack: " + filename;
 	while (true) {
-		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -435,7 +446,7 @@ void show_credits() {
 	f.focus(ok_btn);
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();
@@ -456,38 +467,14 @@ void main_menu() {
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
 	m.intro_text = "Welcome to quizzy! Select an option.";
-	int master_vol = int(config.read_number("master_volume", 100));
 	while (true) {
-		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
+		app.input.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
-		if (key_pressed(KEY_PAGEUP)) {
-			master_vol += 5;
-			if (master_vol > 100) master_vol = 100;
-			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-			set_sound_master_volume(db);
-			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol, false);
-		}
-		if (key_pressed(KEY_PAGEDOWN)) {
-			master_vol -= 5;
-			if (master_vol < 0) master_vol = 0;
-			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-			set_sound_master_volume(db);
-			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol, false);
-		}
-		if (key_pressed(KEY_F12)) {
-			string token = input_box("GitHub Token", "Paste your GitHub Personal Access Token here to enable updates for private repositories:");
-			if (token != "") {
-				file_put_contents("github_token.txt", token);
-				speak("Token saved.", false);
-				check_for_updates(false);
-			}
-		}
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "start") {
@@ -591,11 +578,11 @@ void game_loop() {
 		} else {
 			play_sfx("SahiJawab2_15-02-26_15-12-00-471.mp3", true);
 		}
-		if (manual_next_question && i < questions.length() - 1) {
+		if (app.manual_next_question && i < questions.length() - 1) {
 			speak("Correct answer. Press enter to continue to the next question.", false);
 			while (!key_pressed(KEY_RETURN)) {
 				wait(5);
-				touch_manager.monitor();
+				app.touch.monitor();
 				gm.prepare_frame();
 				gm.draw_logo();
 				gm.present_frame();
@@ -615,7 +602,7 @@ void game_loop() {
 			}
 		}
 	}
-	safe_stop(bg_music);
+	safe_stop(app.bg_music);
 	string total_prize_str = prizes[questions.length() - 1];
 	int base_prize = parse_int(total_prize_str.replace(",", ""));
 	int grand_total = base_prize + state.bonus_money;
@@ -634,13 +621,13 @@ void safe_stop(sound@ s) {
 	}
 }
 
-bool handle_option_selection(Question@ q, int question_index, int i, int[]& option_buttons, bool& double_dip_active, int& current_selection) {
+bool handle_option_selection(QuizSession@ session, int i, int[]& option_buttons, int& current_selection) {
 	play_sfx("click.mp3");
 	if (ask_yes_no("Quizzy", "Is this your final answer?") != 1) {
 		return false; 
 	}
-	safe_stop(bg_music);
-	if (option_locking_sound_enabled) {
+	safe_stop(app.bg_music);
+	if (app.option_locking_sound_enabled) {
 		sound lock_sfx;
 		if (load_sound(lock_sfx, "Kbc Option Lock Tune.mp3")) {
 			lock_sfx.volume = 0; 
@@ -648,16 +635,16 @@ bool handle_option_selection(Question@ q, int question_index, int i, int[]& opti
 			timer wait_timer;
 			while (wait_timer.elapsed < 5000) {
 				wait(5);
-				touch_manager.monitor();
+				app.touch.monitor();
 				gm.prepare_frame();
-				gm.draw_question(q.question, q.options, current_selection);
-				gm.draw_prize_ladder(question_index, prizes);
+				gm.draw_question(session.current_question.question, session.current_question.options, current_selection);
+				gm.draw_prize_ladder(session.question_index, prizes);
 				gm.present_frame();
 			}
 			safe_stop(lock_sfx);
 		}
 	}
-	if (anticipation_enabled) {
+	if (app.anticipation_enabled) {
 		sound heartbeat_sfx;
 		if (load_sound(heartbeat_sfx, "heartbeat.mp3")) {
 			heartbeat_sfx.volume = 0; 
@@ -665,36 +652,36 @@ bool handle_option_selection(Question@ q, int question_index, int i, int[]& opti
 			timer wait_timer;
 			while (wait_timer.elapsed < 4000) {
 				wait(5);
-				touch_manager.monitor();
+				app.touch.monitor();
 				gm.prepare_frame();
-				gm.draw_question(q.question, q.options, current_selection);
-				gm.draw_prize_ladder(question_index, prizes);
+				gm.draw_question(session.current_question.question, session.current_question.options, current_selection);
+				gm.draw_prize_ladder(session.question_index, prizes);
 				gm.present_frame();
 			}
 			safe_stop(heartbeat_sfx);
 		}
 	}
-	bool is_correct = (i == q.correct_index);
+	bool is_correct = session.is_correct_answer(i);
 	if (is_correct) {
 		return true;
 	}
-	if (double_dip_active) {
+	if (session.double_dip_active) {
 		play_sfx("Kbc Galat Jawab.mp3");
 		alert("Wrong!", "That is incorrect, but you have Double Dip active! Try one more time.");
-		double_dip_active = false;
-		if (question_index < 10) {
-			load_sound(bg_music, "clock-sound.mp3");
-			bg_music.volume = 0;
+		session.double_dip_active = false;
+		if (session.question_index < 10) {
+			load_sound(app.bg_music, "clock-sound.mp3");
+			app.bg_music.volume = 0;
 		} else {
-			load_sound(bg_music, "gameMusic.mp3");
-			bg_music.volume = 0;
+			load_sound(app.bg_music, "gameMusic.mp3");
+			app.bg_music.volume = 0;
 		}
-		bg_music.play_looped();
+		app.bg_music.play_looped();
 		return false; 
 	}
-	safe_stop(bg_music);
+	safe_stop(app.bg_music);
 	play_sfx("Kbc Galat Jawab.mp3", true);
-	alert("Game Over", "Wrong answer! The correct answer was: " + q.options[q.correct_index] + ". Better luck next time.");
+	alert("Game Over", "Wrong answer! The correct answer was: " + session.current_question.options[session.current_question.correct_index] + ". Better luck next time.");
 	exit_game_flag = true; 
 	return false;
 }
@@ -702,204 +689,9 @@ bool handle_option_selection(Question@ q, int question_index, int i, int[]& opti
 bool exit_game_flag = false;
 
 bool play_question(Question@ q, int question_index) {
-	exit_game_flag = false;
-	safe_stop(bg_music);
-	if (question_index < 10) {
-		load_sound(bg_music, "clock-sound.mp3");
-		bg_music.volume = 0; 
-	} else {
-		load_sound(bg_music, "gameMusic.mp3");
-		bg_music.volume = 0; 
-	}
-	bg_music.play_looped();
-	audio_form f;
-	f.create_window("Quizzy", false);
-	int q_field = f.create_input_box("Question", q.question, "", 0, true, true);
-	int progress_list = f.create_list("Prize Progress");
-	for (uint i = 0; i < prizes.length(); i++) {
-		string status = "";
-		if (int(i) < question_index) status = " - Completed";
-		else if (int(i) == question_index) status = " - Current";
-		f.add_list_item(progress_list, "Question " + (i + 1) + status + " for ₹" + prizes[i]);
-	}
-	f.set_list_position(progress_list, question_index);
-	int[] option_buttons;
-	for (uint i = 0; i < q.options.length(); i++) {
-		option_buttons.insert_last(f.create_button(q.options[i]));
-	}
-	int btn_5050 = -1;
-	if (state.lifeline_5050) btn_5050 = f.create_button("Lifeline: 50-50");
-	int btn_phone = -1;
-	if (state.lifeline_phone) btn_phone = f.create_button("Lifeline: Phone a Friend");
-	int btn_audience = -1;
-	if (state.lifeline_audience) btn_audience = f.create_button("Lifeline: Ask the Audience");
-	int btn_double = -1;
-	if (state.lifeline_double_dip) btn_double = f.create_button("Lifeline: Double Dip");
-	int btn_expert = -1;
-	if (state.lifeline_expert) btn_expert = f.create_button("Lifeline: Ask an Expert");
-	int quit_btn = f.create_button("Quit Game", false, true);
-	f.focus(q_field);
-	bool double_dip_active = false;
-	timer t; 
-	int last_focus = -1;
-	int master_vol = int(config.read_number("master_volume", 100));
-	set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-	while (true) {
-		wait(5);
-		touch_manager.monitor();
-		f.monitor();
-		gm.prepare_frame();
-		int current_selection = -1;
-		int current_focus = f.get_current_focus();
-		if (current_focus != last_focus) {
-			for (uint i = 0; i < option_buttons.length(); i++) {
-				if (current_focus == option_buttons[i]) {
-					string prefix = "";
-					if (i == 0) prefix = "a: ";
-					else if (i == 1) prefix = "b: ";
-					else if (i == 2) prefix = "c: ";
-					else if (i == 3) prefix = "d: ";
-					speak(prefix + q.options[i], true);
-					break;
-				}
-			}
-			last_focus = current_focus;
-		}
-		for (uint i = 0; i < option_buttons.length(); i++) {
-			if (current_focus == option_buttons[i]) {
-				current_selection = i;
-				break;
-			}
-		}
-		gm.draw_question(q.question, q.options, current_selection);
-		gm.draw_prize_ladder(question_index, prizes);
-		gm.present_frame();
-		int shortcut_selection = -1;
-		if (key_pressed(KEY_A) && option_buttons.length() > 0) shortcut_selection = 0;
-		if (key_pressed(KEY_B) && option_buttons.length() > 1) shortcut_selection = 1;
-		if (key_pressed(KEY_C) && option_buttons.length() > 2) shortcut_selection = 2;
-		if (key_pressed(KEY_D) && option_buttons.length() > 3) shortcut_selection = 3;
-		if (shortcut_selection != -1) {
-			f.focus(option_buttons[shortcut_selection]);
-			if (handle_option_selection(q, question_index, shortcut_selection, option_buttons, double_dip_active, current_selection)) {
-				return true;
-			}
-		}
-		if (key_pressed(KEY_L)) {
-			string ladder = "Prize Ladder: ";
-			for (int j = int(prizes.length()) - 1; j >= 0; j--) {
-				string marker = "";
-				if (j == 4 || j == 9 || j == 15) marker = " - Milestone";
-				if (j == question_index) marker = " - CURRENT";
-				ladder += "Question " + (j + 1) + ": ₹" + prizes[j] + marker + ". ";
-			}
-			speak(ladder, false);
-		}
-		if (key_pressed(KEY_S)) {
-			int lifelines_left = 0;
-			if (state.lifeline_5050) lifelines_left++;
-			if (state.lifeline_phone) lifelines_left++;
-			if (state.lifeline_audience) lifelines_left++;
-			if (state.lifeline_double_dip) lifelines_left++;
-			if (state.lifeline_expert) lifelines_left++;
-			string current_prize = (question_index > 0) ? prizes[question_index - 1] : "0";
-			string status = "Current Prize: ₹" + current_prize + ". Questions remaining: " + (questions.length() - question_index) + ". Lifelines left: " + lifelines_left + ".";
-			speak(status, false);
-		}
-		if (key_pressed(KEY_PAGEUP)) {
-			master_vol += 5;
-			if (master_vol > 100) master_vol = 100;
-			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-			set_sound_master_volume(db);
-			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol, false);
-		}
-		if (key_pressed(KEY_PAGEDOWN)) {
-			master_vol -= 5;
-			if (master_vol < 0) master_vol = 0;
-			float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-			set_sound_master_volume(db);
-			config.write_number("master_volume", master_vol);
-			speak("Volume " + master_vol, false);
-		}
-		if (key_pressed(KEY_F5) && !state.blitz_played) {
-			blitz_round();
-			f.focus(q_field); 
-		}
-		int time_limit = 0;
-		if (question_index < 5) time_limit = 30000;
-		else if (question_index < 10) time_limit = 60000;
-		if (time_limit > 0 && t.elapsed >= time_limit) {
-			safe_stop(bg_music);
-			play_sfx("Kbc Galat Jawab.mp3", true); 
-			alert("Time Up", "You ran out of time! The correct answer was: " + q.options[q.correct_index]);
-			return false;
-		}
-		for (uint i = 0; i < option_buttons.length(); i++) {
-			if (f.is_pressed(option_buttons[i])) {
-				if (handle_option_selection(q, question_index, i, option_buttons, double_dip_active, current_selection)) {
-					return true;
-				}
-				if (exit_game_flag) return false;
-				continue;
-			}
-		}
-		if (btn_5050 != -1 && f.is_pressed(btn_5050)) {
-			state.lifeline_5050 = false;
-			state.lifelines_used_count++;
-			f.set_state(btn_5050, false, false);
-			int removed = 0;
-			for (uint i = 0; i < option_buttons.length() && removed < 2; i++) {
-				if (int(i) != q.correct_index) {
-					f.set_state(option_buttons[i], false, true);
-					removed++;
-				}
-			}
-			alert("50-50", "Two incorrect options have been removed.");
-		}
-		if (btn_phone != -1 && f.is_pressed(btn_phone)) {
-			state.lifeline_phone = false;
-			state.lifelines_used_count++;
-			f.set_state(btn_phone, false, false);
-			safe_stop(bg_music);
-			t.pause();
-			play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
-			alert("Phone a Friend", "Your friend thinks the answer is: " + q.options[q.correct_index]);
-			bg_music.play_looped();
-			t.resume();
-		}
-		if (btn_audience != -1 && f.is_pressed(btn_audience)) {
-			state.lifeline_audience = false;
-			state.lifelines_used_count++;
-			f.set_state(btn_audience, false, false);
-			safe_stop(bg_music);
-			t.pause();
-			play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
-			show_audience_poll(q);
-			bg_music.play_looped();
-			t.resume();
-		}
-		if (btn_double != -1 && f.is_pressed(btn_double)) {
-			state.lifeline_double_dip = false;
-			state.lifelines_used_count++;
-			f.set_state(btn_double, false, false);
-			double_dip_active = true;
-			alert("Double Dip", "Double Dip active! You can now make two guesses for this question.");
-		}
-		if (btn_expert != -1 && f.is_pressed(btn_expert)) {
-			state.lifeline_expert = false;
-			state.lifelines_used_count++;
-			f.set_state(btn_expert, false, false);
-			alert("Ask an Expert", "The expert says the correct answer is definitely: " + q.options[q.correct_index]);
-		}
-		if (f.is_pressed(quit_btn)) {
-			play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);
-			safe_stop(bg_music);
-			return false;
-		}
-	}
-	safe_stop(bg_music);
-	return false;
+	PlayQuestionScene scene;
+	scene.init(q, question_index);
+	return scene.run();
 }
 
 void blitz_round() {
@@ -907,7 +699,7 @@ void blitz_round() {
 		speak("Please wait, blitz questions are still loading...", false);
 		while (blitz_fetching) {
 			wait(5);
-			touch_manager.monitor();
+			app.touch.monitor();
 			gm.prepare_frame();
 			gm.draw_logo();
 			gm.present_frame();
@@ -926,10 +718,10 @@ void blitz_round() {
 	int correct_count = 0;
 	timer blitz_timer;
 	int time_limit = 120000; 
-	safe_stop(bg_music);
-	load_sound(bg_music, "clock-sound.mp3");
-	bg_music.pitch = 120; 
-	bg_music.play_looped();
+	safe_stop(app.bg_music);
+	load_sound(app.bg_music, "clock-sound.mp3");
+	app.bg_music.pitch = 120; 
+	app.bg_music.play_looped();
 	for (uint i = 0; i < blitz_pool.length(); i++) {
 		if (blitz_timer.elapsed >= time_limit) break;
 		Question@ q = blitz_pool[i];
@@ -945,7 +737,7 @@ void blitz_round() {
 		bool answered = false;
 		while (blitz_timer.elapsed < time_limit && !answered) {
 			wait(5);
-			touch_manager.monitor();
+			app.touch.monitor();
 			f.monitor();
 			gm.prepare_frame();
 			int current_selection = -1;
@@ -974,8 +766,8 @@ void blitz_round() {
 		blitz_mutex.lock(); 
 	}
 	if (blitz_mutex.try_lock()) blitz_mutex.unlock(); 
-	safe_stop(bg_music);
-	bg_music.pitch = 100;
+	safe_stop(app.bg_music);
+	app.bg_music.pitch = 100;
 	alert("Quizzy", "Blitz Over! You answered " + correct_count + " questions correctly!");
 	stats.record_blitz(correct_count);
 	menu m;
@@ -984,9 +776,9 @@ void blitz_round() {
 	m.add_item("Retrieve a Lifeline (Cost: ₹25,000)", "lifeline");
 	m.intro_text = "Select your reward.";
 	while (true) {
-		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -1026,9 +818,9 @@ void retrieve_lifeline_menu() {
 	}
 	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + state.bonus_money;
 	while (true) {
-		m.wrap = (config.read_string("menu_wrap", "false") == "true");
+		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -1089,7 +881,7 @@ void show_audience_poll(Question@ q) {
 	f.focus(ok_btn);
 	while (true) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();

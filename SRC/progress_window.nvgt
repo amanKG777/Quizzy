@@ -33,7 +33,7 @@ class progress_window {
 	}
 	void show() {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		f.monitor();
 		if (gm.initialized) {
 			gm.prepare_frame();

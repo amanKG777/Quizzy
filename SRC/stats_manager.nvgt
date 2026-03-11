@@ -75,7 +75,7 @@ class stats_manager {
 		f.focus(btn_back);
 		while (true) {
 			wait(5);
-			touch_manager.monitor();
+			app.touch.monitor();
 			gm.prepare_frame();
 			gm.draw_form(f);
 			gm.present_frame();

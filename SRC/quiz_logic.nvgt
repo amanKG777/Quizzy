@@ -1,0 +1,71 @@
+#include "game_data.nvgt"
+#include "app_context.nvgt"
+
+class QuizSession {
+	Question@ current_question;
+	int question_index;
+	bool double_dip_active;
+	timer question_timer;
+	QuizSession() {
+		double_dip_active = false;
+	}
+	void start_question(Question@ q, int index) {
+		@current_question = q;
+		question_index = index;
+		double_dip_active = false;
+		question_timer.restart();
+	}
+	int get_time_limit() {
+		if (question_index < 5) return 30000;
+		if (question_index < 10) return 60000;
+		return 0; 
+	}
+	bool check_time_limit() {
+		int limit = get_time_limit();
+		if (limit > 0 && question_timer.elapsed >= limit) {
+			return true; 
+		}
+		return false;
+	}
+	bool is_correct_answer(int selected_index) {
+		return (selected_index == current_question.correct_index);
+	}
+	void pause_timer() {
+		question_timer.pause();
+	}
+	void resume_timer() {
+		question_timer.resume();
+	}
+	int[] use_5050() {
+		state.lifeline_5050 = false;
+		state.lifelines_used_count++;
+		int[] removed_options;
+		int removed = 0;
+		for (uint i = 0; i < current_question.options.length() && removed < 2; i++) {
+			if (int(i) != current_question.correct_index) {
+				removed_options.insert_last(i);
+				removed++;
+			}
+		}
+		return removed_options;
+	}
+	string use_phone_a_friend() {
+		state.lifeline_phone = false;
+		state.lifelines_used_count++;
+		return current_question.options[current_question.correct_index];
+	}
+	void use_ask_the_audience() {
+		state.lifeline_audience = false;
+		state.lifelines_used_count++;
+	}
+	void use_double_dip() {
+		state.lifeline_double_dip = false;
+		state.lifelines_used_count++;
+		double_dip_active = true;
+	}
+	string use_ask_an_expert() {
+		state.lifeline_expert = false;
+		state.lifelines_used_count++;
+		return current_question.options[current_question.correct_index];
+	}
+}

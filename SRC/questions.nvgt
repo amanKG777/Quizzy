@@ -58,7 +58,7 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 	int btn_cancel = global_pw.f.create_button("Cancel", false, true);
 	while (!h.complete) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		int current_p = base_progress;
 		if (weight > 0) {
 			current_p += int(h.progress * float(weight));
@@ -79,7 +79,7 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 }
 
 void init_questions(string lang, int category_id = 0, int max_questions = 16, bool is_blitz = false) {
-	string source = config.read_string("question_source", "Random");
+	string source = app.config.read_string("question_source", "Random");
 	if (!is_blitz) {
 		questions.resize(0);
 		@global_pw = progress_window("Quizzy", "Initializing questions...");
@@ -189,7 +189,7 @@ void download_category(int category_id, string lang) {
 	string filename = download_dir + "cat_" + category_id + "_" + lang + ".json";
 	@global_pw = progress_window("Downloader", "Starting download for offline play...");
 	Question@[] download_pool;
-	string source = config.read_string("question_source", "Random");
+	string source = app.config.read_string("question_source", "Random");
 	int num_batches = 5;
 	for (int i = 0; i < num_batches; i++) {
 		int base_p = int((float(i) / float(num_batches)) * 100);
@@ -382,7 +382,7 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 	}
 	while (!h.complete) {
 		wait(5);
-		touch_manager.monitor();
+		app.touch.monitor();
 		if (@global_pw != null) {
 			int p = int(h.progress * 100);
 		}
