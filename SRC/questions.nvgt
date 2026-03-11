@@ -2,8 +2,6 @@
 #include "speech.nvgt"
 #include "progress_window.nvgt"
 
-progress_window@ global_pw = null;
-
 class TranslationCache {
 	dictionary cache;
 	string cache_file;
@@ -49,13 +47,13 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 	http h;
 	h.get(url);
 	bool created_pw = false;
-	if (@global_pw == null) {
-		@global_pw = progress_window("Fetching Questions", action_text);
+	if (@app.pw == null) {
+		@app.pw = progress_window("Fetching Questions", action_text);
 		created_pw = true;
 	} else {
-		global_pw.update(base_progress, action_text);
+		app.pw.update(base_progress, action_text);
 	}
-	int btn_cancel = global_pw.f.create_button("Cancel", false, true);
+	int btn_cancel = app.pw.f.create_button("Cancel", false, true);
 	while (!h.complete) {
 		wait(5);
 		app.touch.monitor();
@@ -65,14 +63,14 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 		} else {
 			current_p = int(h.progress * 100);
 		}
-		global_pw.update(current_p);
-		if (global_pw.f.is_pressed(btn_cancel)) {
+		app.pw.update(current_p);
+		if (app.pw.f.is_pressed(btn_cancel)) {
 			h.reset();
 			return "";
 		}
 	}
 	if (created_pw) {
-		@global_pw = null;
+		@app.pw = null;
 	}
 	if (h.status_code == 200) return h.response_body;
 	return "";
@@ -82,7 +80,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	string source = app.config.read_string("question_source", "Random");
 	if (!is_blitz) {
 		questions.resize(0);
-		@global_pw = progress_window("Quizzy", "Initializing questions...");
+		@app.pw = progress_window("Quizzy", "Initializing questions...");
 	} else {
 		if (blitz_ready || blitz_fetching) return;
 		blitz_fetching = true;
@@ -96,7 +94,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		if (questions.length() >= max_questions) {
 			questions.shuffle();
 			questions.resize(max_questions);
-			@global_pw = null;
+			@app.pw = null;
 			return; 
 		}
 	}
@@ -113,11 +111,11 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		int base_p = int((float(d) / float(total_steps)) * 100);
 		int weight = 100 / total_steps;
 		string action = "Fetching questions...";
-		if (@global_pw != null) global_pw.update(base_p, action);
+		if (@app.pw != null) app.pw.update(base_p, action);
 		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
 	}
 	if (!is_blitz && questions.length() < max_questions) {
-		if (@global_pw != null) global_pw.update(90, "Fetching additional questions...");
+		if (@app.pw != null) app.pw.update(90, "Fetching additional questions...");
 		if (category_id != 0) {
 			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 90, 5);
 		}
@@ -139,7 +137,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		blitz_ready = true;
 		blitz_fetching = false;
 		blitz_mutex.unlock();
-		@global_pw = null;
+		@app.pw = null;
 		return;
 	}
 	bool online_success = (questions.length() >= max_questions);
@@ -157,7 +155,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		}
 	}
 	if (questions.length() > max_questions) questions.resize(max_questions);
-	@global_pw = null;
+	@app.pw = null;
 }
 
 void init_questions_bg(string lang, int category_id, int max_questions, bool is_blitz) {
@@ -187,18 +185,18 @@ void download_category(int category_id, string lang) {
 	string download_dir = get_preferences_path("Boostof Studios", "Quizzy") + "/category_downloads/";
 	if (!directory_exists(download_dir)) directory_create(download_dir);
 	string filename = download_dir + "cat_" + category_id + "_" + lang + ".json";
-	@global_pw = progress_window("Downloader", "Starting download for offline play...");
+	@app.pw = progress_window("Downloader", "Starting download for offline play...");
 	Question@[] download_pool;
 	string source = app.config.read_string("question_source", "Random");
 	int num_batches = 5;
 	for (int i = 0; i < num_batches; i++) {
 		int base_p = int((float(i) / float(num_batches)) * 100);
 		int weight = 100 / num_batches;
-		global_pw.update(base_p, "Downloading batch " + (i+1) + " of " + num_batches + "...");
+		app.pw.update(base_p, "Downloading batch " + (i+1) + " of " + num_batches + "...");
 		fetch_questions_smart(20, "", category_id, lang, 100, @download_pool, source, base_p, weight);
 		wait(100); 
 	}
-	@global_pw = null;
+	@app.pw = null;
 	if (download_pool.length() > 0) {
 		save_questions_to_cache(filename, download_pool);
 		alert("Quizzy", "Download complete! " + download_pool.length() + " questions saved for offline play.");
@@ -377,13 +375,13 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 	string url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" + target_lang + "&dt=t";
 	string post_data = "q=" + url_encode(joined);
 	if (!h.post(url, post_data)) return texts;
-	if (@global_pw != null) {
-		global_pw.update(global_pw.f.get_progress(global_pw.pb), "Translating to " + target_lang + "...");
+	if (@app.pw != null) {
+		app.pw.update(app.pw.f.get_progress(app.pw.pb), "Translating to " + target_lang + "...");
 	}
 	while (!h.complete) {
 		wait(5);
 		app.touch.monitor();
-		if (@global_pw != null) {
+		if (@app.pw != null) {
 			int p = int(h.progress * 100);
 		}
 	}

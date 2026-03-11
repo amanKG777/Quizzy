@@ -2,6 +2,7 @@
 
 class AppContext {
 	InputManager input;
+	progress_window@ pw = null;
 	touch_gesture_manager touch;
 	touch_keyboard_interface@ touch_keys;
 	bool menu_music_enabled = true;

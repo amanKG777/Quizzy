@@ -99,24 +99,23 @@ void apply_orientation(string orient) {
 	sdl_set_hint("SDL_HINT_ORIENTATIONS", value);
 }
 
-void vol_up() {
+void adjust_volume(int delta) {
 	int master_vol = int(app.config.read_number("master_volume", 100));
-	master_vol += 5;
+	master_vol += delta;
 	if (master_vol > 100) master_vol = 100;
+	if (master_vol < 0) master_vol = 0;
 	float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 	set_sound_master_volume(db);
 	app.config.write_number("master_volume", master_vol);
 	speak("Volume " + master_vol, false);
 }
 
+void vol_up() {
+	adjust_volume(5);
+}
+
 void vol_down() {
-	int master_vol = int(app.config.read_number("master_volume", 100));
-	master_vol -= 5;
-	if (master_vol < 0) master_vol = 0;
-	float db = (master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
-	set_sound_master_volume(db);
-	app.config.write_number("master_volume", master_vol);
-	speak("Volume " + master_vol, false);
+	adjust_volume(-5);
 }
 
 void main() {
