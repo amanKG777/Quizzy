@@ -93,7 +93,7 @@ jobs:
         run: C:\nvgt\nvgt.exe -Q pack_creator.nvgt /s && Move-Item sounds.dat SRC/sounds.dat -Force
 
       - name: Build Windows
-        run: cd src;C:\nvgt\nvgt.exe SRC/quizzy.nvgt -c
+        run: cd src;C:\nvgt\nvgt.exe quizzy.nvgt -c
 
       - name: Build Android
         run: C:\nvgt\nvgt.exe -Q SRC/quizzy.nvgt --compile-debug --platform=android
