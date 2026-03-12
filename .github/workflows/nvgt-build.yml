@@ -96,7 +96,7 @@ jobs:
         run: cd src;C:\nvgt\nvgt.exe quizzy.nvgt -c
 
       - name: Build Android
-        run: C:\nvgt\nvgt.exe -Q SRC/quizzy.nvgt --compile-debug --platform=android
+        run: cd src;C:\nvgt\nvgt.exe quizzy.nvgt --compile-debug --platform=android
 
       - name: Build Windows Installer
         run: iscc setup.iss /DAppVersion=${{ github.ref_name }}
