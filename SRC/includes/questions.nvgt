@@ -106,31 +106,53 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		amounts = {5, 5, 6};
 	}
 	Question@[] target_temp;
+	
+	// Initial Fetch Loop
 	int total_steps = difficulties.length();
 	for (uint d = 0; d < difficulties.length(); d++) {
 		int base_p = int((float(d) / float(total_steps)) * 100);
 		int weight = 100 / total_steps;
-		string action = "Fetching questions...";
+		string action = "Fetching questions (" + difficulties[d] + ")...";
 		if (@app.pw != null) app.pw.update(base_p, action);
 		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
 		if (d < difficulties.length() - 1) wait(5000);
 	}
+
+	// Retry Logic: If we didn't get enough questions, keep trying from the network
+	int max_retries = 3;
+	int retry_count = 0;
+	
+	Question@[]@ current_target = is_blitz ? @target_temp : @questions;
+	
+	while (current_target.length() < max_questions && retry_count < max_retries) {
+		retry_count++;
+		int needed = max_questions - current_target.length();
+		if (@app.pw != null) app.pw.update(90, "Retrying fetch (" + retry_count + "/" + max_retries + ")... needed: " + needed);
+		
+		// Try fetching without specific difficulty to maximize chances
+		fetch_questions_smart(needed + 2, "", category_id, lang, max_questions, current_target, source, 90, 10);
+		wait(50); // Small delay between retries
+	}
+
 	if (!is_blitz && questions.length() < max_questions) {
-		if (@app.pw != null) app.pw.update(90, "Fetching additional questions...");
+		// Final attempt with broader scope if still failing
+		if (@app.pw != null) app.pw.update(95, "Finalizing questions...");
 		if (category_id != 0) {
-			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 90, 5);
+			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 95, 5);
 		}
+		// If still not enough, try completely random
 		if (questions.length() < max_questions) {
-			fetch_questions_smart(max_questions - questions.length(), "", 0, lang, max_questions, @questions, source, 95, 5);
+			fetch_questions_smart(max_questions - questions.length(), "", 0, lang, max_questions, @questions, source, 98, 2);
 		}
 	} else if (is_blitz && target_temp.length() < max_questions) {
 		if (category_id != 0) {
-			fetch_questions_smart(max_questions - target_temp.length(), "", category_id, lang, max_questions, @target_temp, source, 90, 5);
+			fetch_questions_smart(max_questions - target_temp.length(), "", category_id, lang, max_questions, @target_temp, source, 95, 5);
 		}
 		if (target_temp.length() < max_questions) {
-			fetch_questions_smart(max_questions - target_temp.length(), "", 0, lang, max_questions, @target_temp, source, 95, 5);
+			fetch_questions_smart(max_questions - target_temp.length(), "", 0, lang, max_questions, @target_temp, source, 98, 2);
 		}
 	}
+
 	if (is_blitz) {
 		if (target_temp.length() > max_questions) target_temp.resize(max_questions);
 		blitz_mutex.lock();
@@ -147,14 +169,27 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	string cache_file = cache_dir + "questions_" + lang + "_" + category_id + ".json";
 	if (online_success) {
 		save_questions_to_cache(cache_file, questions);
-	} else if (questions.length() == 0) {
-		if (load_questions_from_cache(cache_file)) {
-			speak(lang == "hi" ? "इंटरनेट उपलब्ध नहीं है। कैशे से प्रश्न लोड किए गए।" : "Internet unavailable. Loaded questions from cache.", false);
-		} else {
-			alert("Quizzy", "Failed to fetch questions and no cache available. Using fallback questions.");
-			if (lang == "hi") init_hindi_questions(); else init_fallback_questions();
+	} else {
+		// If we don't have enough questions, try to load from cache first to fill gaps
+		if (questions.length() < max_questions && file_exists(cache_file)) {
+			Question@[] cached_questions;
+			if (load_questions_to_array(cache_file, cached_questions)) {
+				for (uint i = 0; i < cached_questions.length(); i++) {
+					if (questions.length() >= max_questions) break;
+					if (!question_exists_in_array(questions, cached_questions[i].question)) {
+						questions.insert_last(cached_questions[i]);
+					}
+				}
+			}
+		}
+		
+		// If STILL not enough, use built-in fallbacks
+		if (questions.length() < max_questions) {
+			if (lang == "hi") append_hindi_questions_unique(); 
+			else append_fallback_questions_unique();
 		}
 	}
+	
 	if (questions.length() > max_questions) questions.resize(max_questions);
 	@app.pw = null;
 }
@@ -162,6 +197,34 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 void init_questions_bg(string lang, int category_id, int max_questions, bool is_blitz) {
 	init_questions(lang, category_id, max_questions, is_blitz);
 }
+
+bool question_exists_in_array(Question@[]@ arr, string q_text) {
+	for (uint i = 0; i < arr.length(); i++) {
+		if (arr[i].question == q_text) return true;
+	}
+	return false;
+}
+
+bool load_questions_to_array(string filename, Question@[]& target_arr) {
+	if (!file_exists(filename)) return false;
+	string content = file_get_contents(filename);
+	var@ v = parse_json(content);
+	json_array@ arr = cast<json_array>(v);
+	if (@arr == null) return false;
+	for (uint i = 0; i < arr.size(); i++) {
+		json_object@ obj = arr.get_object(i);
+		string q_text = string(obj["question"]);
+		int correct = int(obj["correct_index"]);
+		json_array@ opts_arr = obj.get_array("options");
+		string[] options;
+		for (uint j = 0; j < opts_arr.size(); j++) {
+			options.insert_last(string(opts_arr[j]));
+		}
+		target_arr.insert_last(Question(q_text, options, correct));
+	}
+	return target_arr.length() > 0;
+}
+
 
 void fetch_questions_smart(int amount, string difficulty, int category_id, string lang, int max_questions, Question@[]@ target_arr, string source, int base_p = 0, int weight = 0) {
 	int sub_weight = (weight > 0) ? weight / 2 : 0;
@@ -291,7 +354,10 @@ void fetch_from_api(int amount, string difficulty, int category_id, string lang,
 		}
 		options.shuffle();
 		int correct_idx = options.find(correct);
-		target_arr.insert_last(Question(q_text, options, correct_idx));
+		Question new_q(q_text, options, correct_idx);
+		if (!question_exists_in_array(target_arr, q_text)) {
+			target_arr.insert_last(new_q);
+		}
 	}
 }
 
@@ -352,7 +418,10 @@ void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, st
 		}
 		options.shuffle();
 		int correct_idx = options.find(correct);
-		target_arr.insert_last(Question(q_text, options, correct_idx));
+		Question new_q(q_text, options, correct_idx);
+		if (!question_exists_in_array(target_arr, q_text)) {
+			target_arr.insert_last(new_q);
+		}
 	}
 }
 
@@ -417,46 +486,54 @@ string[] translate_bundle(string[]@ texts, string target_lang) {
 }
 
 void init_hindi_questions() {
-	questions.insert_last(Question("भारत की राजधानी क्या है?", {"मुंबई", "नई दिल्ली", "कोलकाता", "चेन्नई"}, 1));
-	questions.insert_last(Question("लौह पुरुष के नाम से किसे जाना जाता है?", {"महात्मा गांधी", "जवाहरलाल नेहरू", "सरदार वल्लभभाई पटेल", "सुभाष चंद्र बोस"}, 2));
-	questions.insert_last(Question("लाल ग्रह के नाम से किस ग्रह को जाना जाता है?", {"पृथ्वी", "मंगल", "बृहस्पति", "शनि"}, 1));
-	questions.insert_last(Question("पृथ्वी पर सबसे बड़ा महासागर कौन सा है?", {"अटलांटिक महासागर", "हिंद महासागर", "आर्कटिक महासागर", "प्रशांत महासागर"}, 3));
-	questions.insert_last(Question("भारत का राष्ट्रगान किसने लिखा था?", {"रवींद्रनाथ टैगोर", "बंकिम चंद्र चट्टोपाध्याय", "सरोजिनी नाटडू", "महात्मा गांधी"}, 0));
-	questions.insert_last(Question("कौन सा जानवर 'रेगिस्तान का जहाज' कहलाता है?", {"घोड़ा", "हाथी", "ऊंट", "शेर"}, 2));
-	questions.insert_last(Question("सौरमंडल का सबसे छोटा ग्रह कौन सा है?", {"बुध", "शुक्र", "मंगल", "प्लूटो"}, 0));
-	questions.insert_last(Question("हिंदी दिवस कब मनाया जाता है?", {"14 सितंबर", "2 अक्टूबर", "15 अगस्त", "26 जनवरी"}, 0));
-	questions.insert_last(Question("क्रिकेट में एक ओवर में कितनी गेंदे होती हैं?", {"चार", "पाँच", "छह", "आठ"}, 2));
-	questions.insert_last(Question("ताजमहल कहाँ स्थित है?", {"दिल्ली", "आगरा", "जयपुर", "लखनऊ"}, 1));
-	questions.insert_last(Question("भारत का राष्ट्रीय फूल कौन सा है?", {"गुलाब", "कमल", "सूरजमुखी", "गेंदा"}, 1));
-	questions.insert_last(Question("मिसाइल मैन ऑफ इंडिया के नाम से किसे जाना जाता है?", {"डॉ. ए.पी.जे. अब्दुल कलाम", "डॉ. होमी जहांगीर भाभा", "डॉ. सी.वी. रमन", "डॉ. विक्रम साराभाई"}, 0));
-	questions.insert_last(Question("गेटवे ऑफ इंडिया कहाँ स्थित है?", {"नई दिल्ली", "मुंबई", "चेन्नई", "कोलकाता"}, 1));
-	questions.insert_last(Question("कंप्यूटर का जनक कहा जाता है?", {"चार्ल्स बैबेज", "बिल गेट्स", "स्टीव जॉब्स", "मार्क जुकरबर्ग"}, 0));
-	questions.insert_last(Question("भारत की सबसे लंबी नदी कौन सी है?", {"यमुना", "ब्रह्मपुत्र", "गंगा", "गोदावरी"}, 2));
-	questions.insert_last(Question("सौरमंडल का सबसे बड़ा ग्रह कौन सा है?", {"शनि", "बृहस्पति", "नेपच्यून", "मंगल"}, 1));
-	for (uint i = 0; i < questions.length(); i++) {
-		int r = random(0, questions.length() - 1);
-		Question@ temp = questions[i];
-		@questions[i] = @questions[r];
-		@questions[r] = @temp;
-	}
+	append_hindi_questions_unique();
 	if (questions.length() > 16) questions.resize(16);
 }
 
+void append_hindi_questions_unique() {
+	add_if_unique(Question("भारत की राजधानी क्या है?", {"मुंबई", "नई दिल्ली", "कोलकाता", "चेन्नई"}, 1));
+	add_if_unique(Question("लौह पुरुष के नाम से किसे जाना जाता है?", {"महात्मा गांधी", "जवाहरलाल नेहरू", "सरदार वल्लभभाई पटेल", "सुभाष चंद्र बोस"}, 2));
+	add_if_unique(Question("लाल ग्रह के नाम से किस ग्रह को जाना जाता है?", {"पृथ्वी", "मंगल", "बृहस्पति", "शनि"}, 1));
+	add_if_unique(Question("पृथ्वी पर सबसे बड़ा महासागर कौन सा है?", {"अटलांटिक महासागर", "हिंद महासागर", "आर्कटिक महासागर", "प्रशांत महासागर"}, 3));
+	add_if_unique(Question("भारत का राष्ट्रगान किसने लिखा था?", {"रवींद्रनाथ टैगोर", "बंकिम चंद्र चट्टोपाध्याय", "सरोजिनी नाटडू", "महात्मा गांधी"}, 0));
+	add_if_unique(Question("कौन सा जानवर 'रेगिस्तान का जहाज' कहलाता है?", {"घोड़ा", "हाथी", "ऊंट", "शेर"}, 2));
+	add_if_unique(Question("सौरमंडल का सबसे छोटा ग्रह कौन सा है?", {"बुध", "शुक्र", "मंगल", "प्लूटो"}, 0));
+	add_if_unique(Question("हिंदी दिवस कब मनाया जाता है?", {"14 सितंबर", "2 अक्टूबर", "15 अगस्त", "26 जनवरी"}, 0));
+	add_if_unique(Question("क्रिकेट में एक ओवर में कितनी गेंदे होती हैं?", {"चार", "पाँच", "छह", "आठ"}, 2));
+	add_if_unique(Question("ताजमहल कहाँ स्थित है?", {"दिल्ली", "आगरा", "जयपुर", "लखनऊ"}, 1));
+	add_if_unique(Question("भारत का राष्ट्रीय फूल कौन सा है?", {"गुलाब", "कमल", "सूरजमुखी", "गेंदा"}, 1));
+	add_if_unique(Question("मिसाइल मैन ऑफ इंडिया के नाम से किसे जाना जाता है?", {"डॉ. ए.पी.जे. अब्दुल कलाम", "डॉ. होमी जहांगीर भाभा", "डॉ. सी.वी. रमन", "डॉ. विक्रम साराभाई"}, 0));
+	add_if_unique(Question("गेटवे ऑफ इंडिया कहाँ स्थित है?", {"नई दिल्ली", "मुंबई", "चेन्नई", "कोलकाता"}, 1));
+	add_if_unique(Question("कंप्यूटर का जनक कहा जाता है?", {"चार्ल्स बैबेज", "बिल गेट्स", "स्टीव जॉब्स", "मार्क जुकरबर्ग"}, 0));
+	add_if_unique(Question("भारत की सबसे लंबी नदी कौन सी है?", {"यमुना", "ब्रह्मपुत्र", "गंगा", "गोदावरी"}, 2));
+	add_if_unique(Question("सौरमंडल का सबसे बड़ा ग्रह कौन सा है?", {"शनि", "बृहस्पति", "नेपच्यून", "मंगल"}, 1));
+}
+
 void init_fallback_questions() {
-	questions.insert_last(Question("What is the capital of India?", {"Mumbai", "New Delhi", "Kolkata", "Chennai"}, 1));
-	questions.insert_last(Question("Who is known as the Iron Man of India?", {"Mahatma Gandhi", "Jawaharlal Nehru", "Sardar Vallabhbhai Patel", "Subhas Chandra Bose"}, 2));
-	questions.insert_last(Question("Which planet is known as the Red Planet?", {"Earth", "Mars", "Jupiter", "Saturn"}, 1));
-	questions.insert_last(Question("Which is the largest ocean on Earth?", {"Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"}, 3));
-	questions.insert_last(Question("Who wrote the national anthem of India?", {"Rabindranath Tagore", "Bankim Chandra Chattopadhyay", "Sarojini Naidu", "Mahatma Gandhi"}, 0));
-	questions.insert_last(Question("Which animal is known as the Ship of the Desert?", {"Horse", "Elephant", "Camel", "Lion"}, 2));
-	questions.insert_last(Question("Which is the smallest planet in our solar system?", {"Mercury", "Venus", "Mars", "Pluto"}, 0));
-	questions.insert_last(Question("How many days are there in a leap year?", {"364", "365", "366", "367"}, 2));
-	questions.insert_last(Question("Which is the longest river in the world?", {"Amazon", "Nile", "Ganga", "Mississippi"}, 1));
-	questions.insert_last(Question("Who painted the Mona Lisa?", {"Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Claude Monet"}, 2));
-	questions.insert_last(Question("Which gas do plants absorb from the atmosphere?", {"Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"}, 2));
-	questions.insert_last(Question("What is the hardest natural substance on Earth?", {"Gold", "Iron", "Diamond", "Platinum"}, 2));
-	questions.insert_last(Question("Which continent is known as the 'Dark Continent'?", {"Asia", "Africa", "Australia", "South America"}, 1));
-	questions.insert_last(Question("Who is the author of 'Harry Potter' series?", {"J.R.R. Tolkien", "George R.R. Martin", "J.K. Rowling", "Roald Dahl"}, 2));
-	questions.insert_last(Question("Which organ is responsible for pumping blood in the human body?", {"Lungs", "Brain", "Heart", "Liver"}, 2));
-	questions.insert_last(Question("What is the national currency of Japan?", {"Yuan", "Won", "Yen", "Baht"}, 2));
+	append_fallback_questions_unique();
+}
+
+void append_fallback_questions_unique() {
+	add_if_unique(Question("What is the capital of India?", {"Mumbai", "New Delhi", "Kolkata", "Chennai"}, 1));
+	add_if_unique(Question("Who is known as the Iron Man of India?", {"Mahatma Gandhi", "Jawaharlal Nehru", "Sardar Vallabhbhai Patel", "Subhas Chandra Bose"}, 2));
+	add_if_unique(Question("Which planet is known as the Red Planet?", {"Earth", "Mars", "Jupiter", "Saturn"}, 1));
+	add_if_unique(Question("Which is the largest ocean on Earth?", {"Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"}, 3));
+	add_if_unique(Question("Who wrote the national anthem of India?", {"Rabindranath Tagore", "Bankim Chandra Chattopadhyay", "Sarojini Naidu", "Mahatma Gandhi"}, 0));
+	add_if_unique(Question("Which animal is known as the Ship of the Desert?", {"Horse", "Elephant", "Camel", "Lion"}, 2));
+	add_if_unique(Question("Which is the smallest planet in our solar system?", {"Mercury", "Venus", "Mars", "Pluto"}, 0));
+	add_if_unique(Question("How many days are there in a leap year?", {"364", "365", "366", "367"}, 2));
+	add_if_unique(Question("Which is the longest river in the world?", {"Amazon", "Nile", "Ganga", "Mississippi"}, 1));
+	add_if_unique(Question("Who painted the Mona Lisa?", {"Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Claude Monet"}, 2));
+	add_if_unique(Question("Which gas do plants absorb from the atmosphere?", {"Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"}, 2));
+	add_if_unique(Question("What is the hardest natural substance on Earth?", {"Gold", "Iron", "Diamond", "Platinum"}, 2));
+	add_if_unique(Question("Which continent is known as the 'Dark Continent'?", {"Asia", "Africa", "Australia", "South America"}, 1));
+	add_if_unique(Question("Who is the author of 'Harry Potter' series?", {"J.R.R. Tolkien", "George R.R. Martin", "J.K. Rowling", "Roald Dahl"}, 2));
+	add_if_unique(Question("Which organ is responsible for pumping blood in the human body?", {"Lungs", "Brain", "Heart", "Liver"}, 2));
+	add_if_unique(Question("What is the national currency of Japan?", {"Yuan", "Won", "Yen", "Baht"}, 2));
+}
+
+void add_if_unique(Question@ q) {
+	if (!question_exists_in_array(questions, q.question)) {
+		questions.insert_last(q);
+	}
 }
