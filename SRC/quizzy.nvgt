@@ -4,7 +4,7 @@
 #include "form.nvgt"
 #include "updater.nvgt"
 
-const string GAME_VERSION = "1.1.9";
+const string GAME_VERSION = "1.0";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
 
