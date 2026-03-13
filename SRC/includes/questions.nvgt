@@ -113,6 +113,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		string action = "Fetching questions...";
 		if (@app.pw != null) app.pw.update(base_p, action);
 		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
+		if (d < difficulties.length() - 1) wait(5000);
 	}
 	if (!is_blitz && questions.length() < max_questions) {
 		if (@app.pw != null) app.pw.update(90, "Fetching additional questions...");
