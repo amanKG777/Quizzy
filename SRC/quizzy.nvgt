@@ -7,7 +7,7 @@
 #include "includes/*.nvgt"
 #include "touch.nvgt"
 #include "settings.nvgt"
-const string GAME_VERSION = "1.1";
+const string GAME_VERSION = "1.1.1";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
 
@@ -867,13 +867,18 @@ void show_audience_poll(Question@ q) {
 	}
 	string result_text = "";
 	for (uint i = 0; i < q.options.length(); i++) {
-		result_text += "Option " + (i + 1) + " (" + q.options[i] + "): " + votes[i] + "%\r\n";
+		string prefix = "";
+		if (i == 0) prefix = "a";
+		else if (i == 1) prefix = "b";
+		else if (i == 2) prefix = "c";
+		else if (i == 3) prefix = "d";
+		result_text += "Option " + prefix + " (" + q.options[i] + "): " + votes[i] + "%\r\n";
 	}
 	audio_form f;
 	f.create_window("Quizzy", false);
-	f.create_input_box("Poll Results", result_text, "", 0, true, true);
+	int poll_box = f.create_input_box("Poll Results", result_text, "", 0, true, true);
 	int ok_btn = f.create_button("OK", true, true);
-	f.focus(ok_btn);
+	f.focus(poll_box);
 	while (true) {
 		wait(5);
 		app.touch.monitor();

@@ -52,7 +52,12 @@ class QuizSession {
 	string use_phone_a_friend() {
 		state.lifeline_phone = false;
 		state.lifelines_used_count++;
-		return current_question.options[current_question.correct_index];
+		string prefix = "";
+		if (current_question.correct_index == 0) prefix = "a: ";
+		else if (current_question.correct_index == 1) prefix = "b: ";
+		else if (current_question.correct_index == 2) prefix = "c: ";
+		else if (current_question.correct_index == 3) prefix = "d: ";
+		return prefix + current_question.options[current_question.correct_index];
 	}
 	void use_ask_the_audience() {
 		state.lifeline_audience = false;
@@ -66,6 +71,11 @@ class QuizSession {
 	string use_ask_an_expert() {
 		state.lifeline_expert = false;
 		state.lifelines_used_count++;
-		return current_question.options[current_question.correct_index];
+		string prefix = "";
+		if (current_question.correct_index == 0) prefix = "a: ";
+		else if (current_question.correct_index == 1) prefix = "b: ";
+		else if (current_question.correct_index == 2) prefix = "c: ";
+		else if (current_question.correct_index == 3) prefix = "d: ";
+		return prefix + current_question.options[current_question.correct_index];
 	}
 }

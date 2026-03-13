@@ -47,13 +47,16 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 	http h;
 	h.get(url);
 	bool created_pw = false;
-	if (@app.pw == null) {
+	if (@app.pw == null && !blitz_fetching) {
 		@app.pw = progress_window("Fetching Questions", action_text);
 		created_pw = true;
-	} else {
+	} else if (@app.pw != null && !blitz_fetching) {
 		app.pw.update(base_progress, action_text);
 	}
-	int btn_cancel = app.pw.f.create_button("Cancel", false, true);
+	int btn_cancel = -1;
+	if (@app.pw != null && !blitz_fetching) {
+		btn_cancel = app.pw.f.create_button("Cancel", false, true);
+	}
 	while (!h.complete) {
 		wait(5);
 		app.touch.monitor();
@@ -63,10 +66,12 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 		} else {
 			current_p = int(h.progress * 100);
 		}
-		app.pw.update(current_p);
-		if (app.pw.f.is_pressed(btn_cancel)) {
-			h.reset();
-			return "";
+		if (@app.pw != null && !blitz_fetching) {
+			app.pw.update(current_p);
+			if (btn_cancel != -1 && app.pw.f.is_pressed(btn_cancel)) {
+				h.reset();
+				return "";
+			}
 		}
 	}
 	if (created_pw) {
