@@ -176,7 +176,7 @@ class PlayQuestionScene {
 				int[] removed = session.use_5050();
 				f.set_state(btn_5050, false, false);
 				for (uint i = 0; i < removed.length(); i++) {
-					f.set_state(option_buttons[removed[i]], false, true);
+					f.set_state(option_buttons[removed[i]], false, false);
 				}
 				alert("50-50", "Two incorrect options have been removed.");
 			}

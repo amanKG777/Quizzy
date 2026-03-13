@@ -117,6 +117,7 @@ void create_custom_pack_form(string filename = "") {
 	int cancel_btn = f.create_button("Cancel", false, true);
 	update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 	f.focus(q_text);
+	int editing_index = -1;
 	while (true) {
 		wait(5);
 		gm.prepare_frame();
@@ -127,18 +128,30 @@ void create_custom_pack_form(string filename = "") {
 		if (f.is_pressed(add_btn)) {
 			if (validate_question_fields(f, q_text, opt1, opt2, opt3, opt4)) {
 				json_object@ q_obj = create_question_json(f, q_text, opt1, opt2, opt3, opt4, correct);
-				questions_arr.add(q_obj);
-				f.add_list_item(questions_list, (questions_arr.size()) + ": " + f.get_text(q_text));
+				if (editing_index != -1) {
+					questions_arr[editing_index] = q_obj;
+					f.edit_list_item(questions_list, (editing_index + 1) + ": " + f.get_text(q_text), editing_index);
+					speak("Question updated.", false);
+				} else {
+					questions_arr.add(q_obj);
+					f.add_list_item(questions_list, (questions_arr.size()) + ": " + f.get_text(q_text));
+					speak("Question added.", false);
+				}
 				clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
 				f.focus(q_text);
-				speak("Question added.", false);
+				editing_index = -1;
+				f.set_text(add_btn, "Add Question");
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
 		}
 		if (f.get_current_focus() == questions_list && enter_pressed) {
 			int pos = f.get_list_position(questions_list);
 			if (pos >= 0) {
-				speak("Question " + (pos + 1) + " selected. Tab to management options.", false);
+				load_question_to_fields(f, questions_arr.get_object(pos), q_text, opt1, opt2, opt3, opt4, correct);
+				speak("Question " + (pos + 1) + " loaded for editing.", false);
+				f.focus(q_text);
+				editing_index = pos;
+				f.set_text(add_btn, "Update Selected Question");
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
 		}
@@ -149,6 +162,8 @@ void create_custom_pack_form(string filename = "") {
 				load_question_to_fields(f, questions_arr.get_object(pos), q_text, opt1, opt2, opt3, opt4, correct);
 				speak("Question loaded into fields for editing.", false);
 				f.focus(q_text);
+				editing_index = pos;
+				f.set_text(add_btn, "Update Selected Question");
 			} else {
 				if (validate_question_fields(f, q_text, opt1, opt2, opt3, opt4)) {
 					json_object@ q_obj = create_question_json(f, q_text, opt1, opt2, opt3, opt4, correct);
@@ -156,6 +171,8 @@ void create_custom_pack_form(string filename = "") {
 					f.edit_list_item(questions_list, (pos + 1) + ": " + f.get_text(q_text), pos);
 					speak("Question updated.", false);
 					clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
+					editing_index = -1;
+					f.set_text(add_btn, "Add Question");
 				}
 			}
 		}
@@ -165,16 +182,29 @@ void create_custom_pack_form(string filename = "") {
 				questions_arr.remove(pos);
 				f.delete_list_item(questions_list, pos);
 				speak("Question removed.", false);
+				if (editing_index == pos) {
+					editing_index = -1;
+					f.set_text(add_btn, "Add Question");
+					clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
+				} else if (editing_index > pos) {
+					editing_index--;
+				}
 				refresh_list_indices(f, questions_list, questions_arr);
 				update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 			}
 		}
 		if (f.is_pressed(move_up_btn)) {
 			handle_move_item(f, questions_list, questions_arr, -1);
+			editing_index = -1;
+			f.set_text(add_btn, "Add Question");
+			clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
 			update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 		}
 		if (f.is_pressed(move_down_btn)) {
 			handle_move_item(f, questions_list, questions_arr, 1);
+			editing_index = -1;
+			f.set_text(add_btn, "Add Question");
+			clear_question_fields(f, q_text, opt1, opt2, opt3, opt4, correct);
 			update_management_button_states(f, questions_list, questions_arr, update_btn, remove_btn, move_up_btn, move_down_btn);
 		}
 		if (f.is_pressed(save_btn)) {

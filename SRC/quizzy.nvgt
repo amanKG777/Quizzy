@@ -325,35 +325,44 @@ void settings_menu() {
 
 void manage_custom_packs_menu() {
 	menu m;
-	createDefaultMenu(m);
-	m.add_item("Play Custom Pack", "play");
-	m.add_item("Create Custom Pack", "create");
-	m.add_item("Back", "back");
-	m.intro_text = "Manage Custom Packs. Select an option.";
 	while (true) {
-		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-		wait(5);
-		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
-		if (!m.monitor()) {
-			string choice = m.selected_item_id;
-			if (choice == "play") {
-				string filename = select_custom_pack();
-				if (filename != "") {
+		m.reset();
+		createDefaultMenu(m);
+		m.intro_text = "Manage Custom Packs. Select an option.";
+		string path = get_custom_questions_path();
+		string[] files = find_files(path + "*.json");
+		for (uint i = 0; i < files.length(); i++) {
+			m.add_item(files[i], "file_" + files[i]);
+		}
+		m.add_item("Open pack from external location...", "open_external");
+		m.add_item("Create Custom Pack", "create");
+		m.add_item("Back", "back");
+		while (true) {
+			m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
+			wait(5);
+			app.touch.monitor();
+			gm.prepare_frame();
+			gm.draw_menu(m);
+			gm.present_frame();
+			if (!m.monitor()) {
+				string choice = m.selected_item_id;
+				if (choice.starts_with("file_")) {
+					string filename = path + choice.substr(5);
 					custom_pack_actions_menu(filename);
+					break;
+				} else if (choice == "open_external") {
+					string filename = select_custom_pack();
+					if (filename != "") {
+						custom_pack_actions_menu(filename);
+					}
+					break;
+				} else if (choice == "create") {
+					create_custom_pack_form();
+					break;
+				} else if (choice == "back" || choice == "") {
+					return;
 				}
-			} else if (choice == "create") {
-				create_custom_pack_form();
-			} else if (choice == "back" || choice == "") {
-				break;
 			}
-			m.reset();
-			createDefaultMenu(m);
-			m.add_item("Play Custom Pack", "play");
-			m.add_item("Create Custom Pack", "create");
-			m.add_item("Back", "back");
 		}
 	}
 }

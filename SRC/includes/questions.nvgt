@@ -106,8 +106,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		amounts = {5, 5, 6};
 	}
 	Question@[] target_temp;
-	
-	// Initial Fetch Loop
 	int total_steps = difficulties.length();
 	for (uint d = 0; d < difficulties.length(); d++) {
 		int base_p = int((float(d) / float(total_steps)) * 100);
@@ -117,30 +115,21 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		fetch_questions_smart(amounts[d], difficulties[d], category_id, lang, max_questions, is_blitz ? @target_temp : @questions, source, base_p, weight);
 		if (d < difficulties.length() - 1) wait(5000);
 	}
-
-	// Retry Logic: If we didn't get enough questions, keep trying from the network
 	int max_retries = 3;
 	int retry_count = 0;
-	
 	Question@[]@ current_target = is_blitz ? @target_temp : @questions;
-	
 	while (current_target.length() < max_questions && retry_count < max_retries) {
 		retry_count++;
 		int needed = max_questions - current_target.length();
 		if (@app.pw != null) app.pw.update(90, "Retrying fetch (" + retry_count + "/" + max_retries + ")... needed: " + needed);
-		
-		// Try fetching without specific difficulty to maximize chances
 		fetch_questions_smart(needed + 2, "", category_id, lang, max_questions, current_target, source, 90, 10);
-		wait(50); // Small delay between retries
+		wait(50); 
 	}
-
 	if (!is_blitz && questions.length() < max_questions) {
-		// Final attempt with broader scope if still failing
 		if (@app.pw != null) app.pw.update(95, "Finalizing questions...");
 		if (category_id != 0) {
 			fetch_questions_smart(max_questions - questions.length(), "", category_id, lang, max_questions, @questions, source, 95, 5);
 		}
-		// If still not enough, try completely random
 		if (questions.length() < max_questions) {
 			fetch_questions_smart(max_questions - questions.length(), "", 0, lang, max_questions, @questions, source, 98, 2);
 		}
@@ -152,7 +141,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 			fetch_questions_smart(max_questions - target_temp.length(), "", 0, lang, max_questions, @target_temp, source, 98, 2);
 		}
 	}
-
 	if (is_blitz) {
 		if (target_temp.length() > max_questions) target_temp.resize(max_questions);
 		blitz_mutex.lock();
@@ -170,7 +158,6 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 	if (online_success) {
 		save_questions_to_cache(cache_file, questions);
 	} else {
-		// If we don't have enough questions, try to load from cache first to fill gaps
 		if (questions.length() < max_questions && file_exists(cache_file)) {
 			Question@[] cached_questions;
 			if (load_questions_to_array(cache_file, cached_questions)) {
@@ -182,14 +169,11 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 				}
 			}
 		}
-		
-		// If STILL not enough, use built-in fallbacks
 		if (questions.length() < max_questions) {
 			if (lang == "hi") append_hindi_questions_unique(); 
 			else append_fallback_questions_unique();
 		}
 	}
-	
 	if (questions.length() > max_questions) questions.resize(max_questions);
 	@app.pw = null;
 }
@@ -370,17 +354,17 @@ void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, st
 		else if (category_id == 11) category_slug = "film_and_tv";
 		else if (category_id == 12) category_slug = "music";
 		else if (category_id == 14) category_slug = "film_and_tv";
-		else if (category_id == 15) category_slug = "film_and_tv";
+		else if (category_id == 15) category_slug = "sport_and_leisure"; 
 		else if (category_id == 17) category_slug = "science";
-		else if (category_id == 18) category_slug = "science";
-		else if (category_id == 19) category_slug = "science";
-		else if (category_id == 20) category_slug = "society_and_culture";
+		else if (category_id == 18) category_slug = "science"; 
+		else if (category_id == 19) category_slug = "science"; 
+		else if (category_id == 20) category_slug = "society_and_culture"; 
 		else if (category_id == 21) category_slug = "sport_and_leisure";
 		else if (category_id == 22) category_slug = "geography";
 		else if (category_id == 23) category_slug = "history";
 		else if (category_id == 24) category_slug = "society_and_culture";
 		else if (category_id == 25) category_slug = "arts_and_literature";
-		else if (category_id == 27) category_slug = "science";
+		else if (category_id == 27) category_slug = "science"; 
 	}
 	string url = "https://the-trivia-api.com/v2/questions?limit=" + amount;
 	if (difficulty != "") url += "&difficulties=" + difficulty;
