@@ -166,6 +166,7 @@ string select_language() {
 	createDefaultMenu(m);
 	m.add_item("English", "en");
 	m.add_item("Hindi", "hi");
+	m.add_item("French", "fr");
 	m.add_item("Back", "back");
 	m.intro_text = "Select your preferred language.";
 	string lang = "en";
@@ -589,12 +590,16 @@ void game_loop() {
 		if (i < questions.length() - 1) {
 			if (state.current_lang == "hi") {
 				speak("प्रश्न " + (i + 2), false);
+			} else if (state.current_lang == "fr") {
+				speak("Question " + (i + 2), false);
 			} else {
 				speak("Question " + (i + 2), false);
 			}
 		} else {
 			if (state.current_lang == "hi") {
 				speak("सही जवाब।", false);
+			} else if (state.current_lang == "fr") {
+				speak("Bonne réponse.", false);
 			} else {
 				speak("Correct answer.", false);
 			}
@@ -606,9 +611,21 @@ void game_loop() {
 	int grand_total = base_prize + state.bonus_money;
 	stats.record_game(base_prize, state.bonus_money, questions.length(), state.lifelines_used_count);
 	if (state.bonus_money > 0) {
-		alert("Quizzy", "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(state.bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!");
+		string msg = "Congratulations! You have won the game!\n\nBase Prize: ₹" + total_prize_str + "\nBonus: ₹" + format_currency(state.bonus_money) + "\nGrand Total: ₹" + format_currency(grand_total) + "!";
+		if (state.current_lang == "fr") {
+			msg = "Félicitations ! Vous avez gagné la partie !\n\nPrix de base : ₹" + total_prize_str + "\nBonus : ₹" + format_currency(state.bonus_money) + "\nGrand total : ₹" + format_currency(grand_total) + " !";
+		} else if (state.current_lang == "hi") {
+			msg = "बधाई हो! आपने खेल जीत लिया है!\n\nमूल इनाम: ₹" + total_prize_str + "\nबोनस: ₹" + format_currency(state.bonus_money) + "\nकुल योग: ₹" + format_currency(grand_total) + "!";
+		}
+		alert("Quizzy", msg);
 	} else {
-		alert("Quizzy", "Congratulations! You have won the game and earned ₹" + total_prize_str + "!");
+		string msg = "Congratulations! You have won the game and earned ₹" + total_prize_str + "!";
+		if (state.current_lang == "fr") {
+			msg = "Félicitations ! Vous avez gagné la partie et remporté ₹" + total_prize_str + " !";
+		} else if (state.current_lang == "hi") {
+			msg = "बधाई हो! आपने खेल जीत लिया है और ₹" + total_prize_str + " कमाए हैं!";
+		}
+		alert("Quizzy", msg);
 	}
 }
 

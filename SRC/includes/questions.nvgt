@@ -176,6 +176,7 @@ void init_questions(string lang, int category_id = 0, int max_questions = 16, bo
 		}
 		if (questions.length() < max_questions) {
 			if (lang == "hi") append_hindi_questions_unique(); 
+			else if (lang == "fr") append_french_questions_unique();
 			else append_fallback_questions_unique();
 		}
 	}
@@ -330,11 +331,11 @@ void fetch_from_api(int amount, string difficulty, int category_id, string lang,
 		for (uint j = 0; j < incorrect_json.size(); j++) {
 			options.insert_last(html_entities_decode(string(incorrect_json[j])));
 		}
-		if (lang == "hi") {
+		if (lang == "hi" || lang == "fr") {
 			string[] to_translate;
 			to_translate.insert_last(q_text);
 			for (uint k = 0; k < options.length(); k++) to_translate.insert_last(options[k]);
-			string[] translated = translate_bundle(to_translate, "hi");
+			string[] translated = translate_bundle(to_translate, lang);
 			if (translated.length() >= 5 && options.length() >= 4) {
 				q_text = translated[0];
 				for (uint k = 0; k < 4; k++) options[k] = translated[k + 1];
@@ -394,11 +395,11 @@ void fetch_from_trivia_api_v2(int amount, string difficulty, int category_id, st
 		for (uint j = 0; j < incorrect_json.size(); j++) {
 			options.insert_last(string(incorrect_json[j]));
 		}
-		if (lang == "hi") {
+		if (lang == "hi" || lang == "fr") {
 			string[] to_translate;
 			to_translate.insert_last(q_text);
 			for (uint k = 0; k < options.length(); k++) to_translate.insert_last(options[k]);
-			string[] translated = translate_bundle(to_translate, "hi");
+			string[] translated = translate_bundle(to_translate, lang);
 			if (translated.length() >= 5 && options.length() >= 4) {
 				q_text = translated[0];
 				for (uint k = 0; k < 4; k++) options[k] = translated[k + 1];
@@ -496,6 +497,30 @@ void append_hindi_questions_unique() {
 	add_if_unique(Question("कंप्यूटर का जनक कहा जाता है?", {"चार्ल्स बैबेज", "बिल गेट्स", "स्टीव जॉब्स", "मार्क जुकरबर्ग"}, 0));
 	add_if_unique(Question("भारत की सबसे लंबी नदी कौन सी है?", {"यमुना", "ब्रह्मपुत्र", "गंगा", "गोदावरी"}, 2));
 	add_if_unique(Question("सौरमंडल का सबसे बड़ा ग्रह कौन सा है?", {"शनि", "बृहस्पति", "नेपच्यून", "मंगल"}, 1));
+}
+
+void init_french_questions() {
+	append_french_questions_unique();
+	if (questions.length() > 16) questions.resize(16);
+}
+
+void append_french_questions_unique() {
+	add_if_unique(Question("Quelle est la capitale de la France ?", {"Marseille", "Paris", "Lyon", "Bordeaux"}, 1));
+	add_if_unique(Question("Qui a écrit « Les Misérables » ?", {"Gustave Flaubert", "Victor Hugo", "Émile Zola", "Honoré de Balzac"}, 1));
+	add_if_unique(Question("Quelle planète est surnommée la planète rouge ?", {"Terre", "Mars", "Jupiter", "Saturn"}, 1));
+	add_if_unique(Question("Quel est le plus grand océan du monde ?", {"Océan Atlantique", "Océan Indien", "Océan Arctique", "Océan Pacifique"}, 3));
+	add_if_unique(Question("Qui a peint la Mona Lisa ?", {"Vincent van Gogh", "Claude Monet", "Léonard de Vinci", "Pablo Picasso"}, 2));
+	add_if_unique(Question("Quel animal est surnommé le 'vaisseau du désert' ?", {"Cheval", "Éléphant", "Chameau", "Lion"}, 2));
+	add_if_unique(Question("Quelle est la monnaie de la France ?", {"Franc", "Dollar", "Euro", "Livre"}, 2));
+	add_if_unique(Question("En quelle année la Révolution française a-t-elle commencé ?", {"1776", "1789", "1804", "1815"}, 1));
+	add_if_unique(Question("Quel est le plus grand pays du monde par sa superficie ?", {"Canada", "Chine", "États-Unis", "Russie"}, 3));
+	add_if_unique(Question("Où se trouve la tour Eiffel ?", {"Londres", "Paris", "Berlin", "Madrid"}, 1));
+	add_if_unique(Question("Quelle est la langue officielle du Brésil ?", {"Espagnol", "Portugais", "Français", "Anglais"}, 1));
+	add_if_unique(Question("Qui est l'inventeur du téléphone ?", {"Thomas Edison", "Alexander Graham Bell", "Nikola Tesla", "Albert Einstein"}, 1));
+	add_if_unique(Question("Quel est le plus haut sommet du monde ?", {"K2", "Mont Blanc", "Everest", "Kilimandjaro"}, 2));
+	add_if_unique(Question("Combien de couleurs y a-t-il dans l'arc-en-ciel ?", {"5", "6", "7", "8"}, 2));
+	add_if_unique(Question("Quel est l'organe qui pompe le sang dans le corps humain ?", {"Poumons", "Cerveau", "Cœur", "Foie"}, 2));
+	add_if_unique(Question("Quel est le gaz que les plantes absorbent de l'atmosphère ?", {"Oxygène", "Azote", "Dioxyde de carbone", "Hydrogène"}, 2));
 }
 
 void init_fallback_questions() {
