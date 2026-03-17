@@ -1,3 +1,5 @@
+game_window@ g_window;
+
 void createDefaultMenu(menu& m) {
 	m.click_sound = "item_move.mp3";
 	m.select_sound = "click.mp3";

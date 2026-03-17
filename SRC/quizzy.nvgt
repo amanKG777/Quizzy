@@ -121,7 +121,10 @@ void main() {
 		@sound_default_pack = @app.game_pack;
 	}
 	string play_intro = app.config.read_string("play_startup_sound", "true");
-	show_window("Quizzy");
+	@g_window = show_window("Quizzy", WINDOW_FLAG_FULLSCREEN | WINDOW_FLAG_MAXIMIZED);
+	if (@g_window != null) {
+		g_window.renderer.set_logical_presentation(800, 600, LOGICAL_PRESENTATION_LETTERBOX);
+	}
 	gm.setup();
 	gm.enabled = (app.config.read_string("visuals_enabled", "true") == "true");
 	gm.high_contrast = (app.config.read_string("high_contrast", "false") == "true");

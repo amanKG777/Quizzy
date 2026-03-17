@@ -1,28 +1,5 @@
-#if windows
-#pragma plugin graphics
-#endif
 
-#if_not windows
-class graphics_renderer {
-	bool setup(uint64 window_handle) { return false; }
-	int load_image(const string &in filename) { return -1; }
-	int load_font(const string &in filename, int size, bool bold, bool italic) { return -1; }
-	void draw_image(int id, int x, int y, int w, int h) {}
-	void draw_image_region(int id, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {}
-	void set_font(const string &in font_name, float size, bool bold, bool italic) {}
-	void draw_text(const string &in text, int x, int y, int r, int g, int b) {}
-	uint64 measure_text(const string &in text) { return 0; }
-	void draw_text_wrapped(const string &in text, int x, int y, int w, int r, int g, int b) {}
-	uint64 measure_text_wrapped(const string &in text, int w) { return 0; }
-	void clear_screen(int r, int g, int b) {}
-	void draw_rect(int x, int y, int w, int h, int r, int g, int b, bool filled) {}
-	void draw_circle(int x, int y, int radius, int r, int g, int b, bool filled) {}
-	void draw_line(int x1, int y1, int x2, int y2, int r, int g, int b, int thickness) {}
-	void draw_menu(const string &in items, int selected_index, int x, int y) {}
-	void present() {}
-	void select_font(int id) {}
-}
-#endif
+
 
 class Color {
 	int r, g, b;
@@ -53,28 +30,46 @@ class Theme {
 }
 
 class graphics_manager {
-	graphics_renderer@ gfx;
 	bool initialized = false;
 	bool enabled = true;
 	bool high_contrast = false;
 	string current_font = "arial";
-	int font_id = -1;
-	int logo_id = -1;
+	text_font@ font_obj = null;
+	graphic@ logo_img = null;
 	Theme@ classic_theme;
 	Theme@ hc_theme;
 	Theme@ current_theme;
+	string cached_q_text;
+	graphic@ cached_q_img;
+	string[] cached_opt_texts;
+	graphic@[] cached_opt_imgs;
+	graphic@[] cached_opt_hl_imgs;
+	string[] cached_prize_texts;
+	graphic@[] cached_prize_imgs;
+	graphic@[] cached_prize_hl_imgs;
+	graphic@[] cached_prize_ms_imgs;
+	graphic@[] cached_prize_comp_imgs;
+	string cached_menu_title;
+	graphic@ cached_menu_title_img;
+	string[] cached_menu_items;
+	graphic@[] cached_menu_item_imgs;
+	graphic@[] cached_menu_item_hl_imgs;
+	string cached_form_title;
+	graphic@ cached_form_title_img;
+	string[] cached_form_caps;
+	graphic@[] cached_form_cap_imgs;
+	graphic@[] cached_form_cap_hl_imgs;
 	graphics_manager() {
-		@gfx = graphics_renderer();
 		@classic_theme = Theme(Color(0, 0, 50), Color(255, 255, 255), Color(150, 150, 255), Color(100, 100, 100), Color(255, 255, 0), Color(255, 215, 0), Color(100, 255, 100));
 		@hc_theme = Theme(Color(0, 0, 0), Color(255, 255, 255), Color(255, 255, 255), Color(255, 255, 255), Color(0, 0, 0), Color(255, 255, 0), Color(0, 255, 0));
 		@current_theme = @classic_theme;
 	}
 	bool setup() {
 		if (initialized) return true;
-		if (gfx.setup(get_window_os_handle())) {
+		if (true) {
 			initialized = true;
 			update_font(current_font);
-			logo_id = gfx.load_image("LOGO.png");
+			@logo_img = load_surface("LOGO.png");
 			return true;
 		}
 		return false;
@@ -84,100 +79,241 @@ class graphics_manager {
 		current_font = font_name;
 		int size = 20;
 		if (font_name == "hindi") {
-			font_id = gfx.load_font("fonts/NotoSansDevanagari-Regular.ttf", size, false, false);
+			@font_obj = get_font("fonts/NotoSansDevanagari-Regular.ttf", size);
 		} else {
-			font_id = gfx.load_font(font_name, size, false, false);
+			@font_obj = get_font(font_name, size);
 		}
-		if (font_id != -1) gfx.select_font(font_id);
+		clear_cache();
+	}
+	void clear_cache() {
+		cached_q_text = "";
+		cached_opt_texts.resize(0);
+		cached_prize_texts.resize(0);
+		cached_menu_title = "";
+		cached_menu_items.resize(0);
+		cached_form_title = "";
+		cached_form_caps.resize(0);
 	}
 	void prepare_frame() {
 		if (!initialized || !enabled) return;
-		@current_theme = high_contrast ? @hc_theme : @classic_theme;
-		gfx.clear_screen(current_theme.bg.r, current_theme.bg.g, current_theme.bg.b);
+		Theme@ new_theme = high_contrast ? @hc_theme : @classic_theme;
+		if (@new_theme != @current_theme) {
+			@current_theme = new_theme;
+			clear_cache();
+		}
+		g_window.clear(current_theme.bg.r, current_theme.bg.g, current_theme.bg.b);
 	}
 	void present_frame() {
 		if (!initialized || !enabled) return;
-		gfx.present();
+		g_window.present();
 	}
 	void draw_logo() {
 		if (!initialized || !enabled) return;
-		gfx.clear_screen(10, 10, 15); 
-		if (logo_id != -1) {
-			gfx.draw_image(logo_id, 400 - 150, 300 - 150, 300, 300);
+		g_window.clear(10, 10, 15);
+		if (@logo_img != null) {
+			g_window.renderer.render_graphic(logo_img, 0, 0, logo_img.width, logo_img.height, 400 - 150, 300 - 150, 300, 300);
 		}
 	}
-	void draw_question(string question_text, string[] options, int selected_index) {
-		if (!initialized || !enabled) return;
-		gfx.draw_text_wrapped(question_text, 50, 50, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b); 
+	int draw_question(string question_text, string[] options, int selected_index) {
+		if (!initialized || !enabled || @font_obj == null) return -1;
+		mouse_update();
+		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
+		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
+		if (question_text != cached_q_text) {
+			cached_q_text = question_text;
+			@cached_q_img = font_obj.render_text_blended_wrapped(question_text, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+		}
+		if (@cached_q_img != null) g_window.renderer.render_graphic(cached_q_img, 50, 50);
+		bool options_changed = false;
+		if (options.length() != cached_opt_texts.length()) {
+			options_changed = true;
+		} else {
+			for (uint i = 0; i < options.length(); i++) {
+				if (options[i] != cached_opt_texts[i]) {
+					options_changed = true;
+					break;
+				}
+			}
+		}
+		if (options_changed) {
+			cached_opt_texts = options;
+			cached_opt_imgs.resize(options.length());
+			cached_opt_hl_imgs.resize(options.length());
+			for (uint i = 0; i < options.length(); i++) {
+				@cached_opt_imgs[i] = font_obj.render_text_blended(options[i], current_theme.text.r, current_theme.text.g, current_theme.text.b);
+				@cached_opt_hl_imgs[i] = font_obj.render_text_blended(options[i], current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+			}
+		}
 		int start_y = 200;
 		int line_height = 40;
+		int newly_focused = -1;
 		for (uint i = 0; i < options.length(); i++) {
-			int r = current_theme.text.r, g = current_theme.text.g, b = current_theme.text.b;
-			if (int(i) == selected_index) {
-				gfx.draw_rect(40, start_y + i * line_height - 5, 540, line_height, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
-				r = current_theme.highlight_text.r;
-				g = current_theme.highlight_text.g;
-				b = current_theme.highlight_text.b;
+			int ix = 40;
+			int iy = start_y + i * line_height - 5;
+			int iw = 540;
+			int ih = line_height;
+			if (MOUSE_AVAILABLE && mouseX >= ix && mouseX <= ix + iw && mouseY >= iy && mouseY <= iy + ih) {
+				if (int(i) != selected_index && (MOUSE_X != 0 || MOUSE_Y != 0)) {
+					newly_focused = i;
+					selected_index = i;
+				}
+				if (mouse_pressed(1)) {
+					newly_focused = i;
+					selected_index = i;
+					simulate_key_down(KEY_RETURN);
+					simulate_key_up(KEY_RETURN);
+				}
 			}
-			gfx.draw_text(options[i], 60, start_y + i * line_height, r, g, b);
+			graphic@ img_to_draw = null;
+			if (int(i) == selected_index) {
+				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
+				@img_to_draw = cached_opt_hl_imgs[i];
+			} else {
+				@img_to_draw = cached_opt_imgs[i];
+			}
+			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, 60, start_y + i * line_height);
 		}
+		return newly_focused;
 	}
 	void draw_prize_ladder(int current_index, string[]@ prizes) {
-		if (!initialized || !enabled || @prizes == null) return;
+		if (!initialized || !enabled || @prizes == null || @font_obj == null) return;
+		bool prizes_changed = false;
+		if (prizes.length() != cached_prize_texts.length()) {
+			prizes_changed = true;
+		} else {
+			for (uint i = 0; i < prizes.length(); i++) {
+				if (prizes[i] != cached_prize_texts[i]) {
+					prizes_changed = true;
+					break;
+				}
+			}
+		}
+		if (prizes_changed) {
+			cached_prize_texts = prizes;
+			uint len = prizes.length();
+			cached_prize_imgs.resize(len);
+			cached_prize_hl_imgs.resize(len);
+			cached_prize_ms_imgs.resize(len);
+			cached_prize_comp_imgs.resize(len);
+			for (uint i = 0; i < len; i++) {
+				string txt = (i + 1) + ": ₹" + prizes[i];
+				@cached_prize_imgs[i] = font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+				@cached_prize_hl_imgs[i] = font_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+				@cached_prize_ms_imgs[i] = font_obj.render_text_blended(txt, current_theme.milestone.r, current_theme.milestone.g, current_theme.milestone.b);
+				@cached_prize_comp_imgs[i] = font_obj.render_text_blended(txt, current_theme.completed.r, current_theme.completed.g, current_theme.completed.b);
+			}
+		}
 		int start_x = 600;
 		int start_y = 20;
 		int line_height = 28;
 		int num_prizes = int(prizes.length());
 		for (int i = num_prizes - 1; i >= 0; i--) {
-			int r = current_theme.text.r, g = current_theme.text.g, b = current_theme.text.b;
 			bool is_milestone = (i == 4 || i == 9 || i == 15);
-			if (is_milestone) { 
-				r = current_theme.milestone.r; 
-				g = current_theme.milestone.g; 
-				b = current_theme.milestone.b; 
-			} 
+			graphic@ img_to_draw = cached_prize_imgs[i];
 			if (i == current_index) {
-				r = current_theme.highlight_text.r;
-				g = current_theme.highlight_text.g;
-				b = current_theme.highlight_text.b;
-				gfx.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0, true);
+				g_window.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0);
+				@img_to_draw = cached_prize_hl_imgs[i];
 			} else if (i < current_index) {
-				r = current_theme.completed.r;
-				g = current_theme.completed.g;
-				b = current_theme.completed.b;
+				@img_to_draw = cached_prize_comp_imgs[i];
+			} else if (is_milestone) {
+				@img_to_draw = cached_prize_ms_imgs[i];
 			}
-			gfx.draw_text((i + 1) + ": ₹" + prizes[i], start_x, start_y + (num_prizes - 1 - i) * line_height, r, g, b);
+			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, start_x, start_y + (num_prizes - 1 - i) * line_height);
 		}
 	}
 	void draw_menu(menu@ m) {
-		if (!initialized || !enabled || @m == null) return;
+		if (!initialized || !enabled || @m == null || @font_obj == null) return;
+		mouse_update();
+		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
+		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
 		string title = m.intro_text != "" ? m.intro_text : "Menu";
-		uint64 size = gfx.measure_text(title);
-		int w = size >> 32;
-		gfx.draw_text(title, 400 - (w / 2), 50, current_theme.text.r, current_theme.text.g, current_theme.text.b);
-		gfx.draw_line(100, 95, 700, 95, current_theme.accent.r, current_theme.accent.g, current_theme.accent.b, 2);
-		string items_str = "";
-		for(int i=0; i<m.get_item_count(); i++) {
-			if (i > 0) items_str += "|";
-			items_str += m.get_item_text(i);
+		if (title != cached_menu_title) {
+			cached_menu_title = title;
+			@cached_menu_title_img = font_obj.render_text_blended(title, current_theme.text.r, current_theme.text.g, current_theme.text.b);
 		}
-		gfx.draw_menu(items_str, m.get_focused_item(), 400, 120);
+		uint64 size = g_window.measure_text(title);
+		int w = size >> 32;
+		if (@cached_menu_title_img != null) g_window.renderer.render_graphic(cached_menu_title_img, 400 - (w / 2), 50);
+		g_window.draw_line(100, 95, 700, 95, current_theme.accent.r, current_theme.accent.g, current_theme.accent.b);
+		int item_count = m.get_item_count();
+		bool items_changed = false;
+		if (uint(item_count) != cached_menu_items.length()) {
+			items_changed = true;
+		} else {
+			for (int i = 0; i < item_count; i++) {
+				if (m.get_item_text(i) != cached_menu_items[i]) {
+					items_changed = true;
+					break;
+				}
+			}
+		}
+		if (items_changed) {
+			cached_menu_items.resize(item_count);
+			cached_menu_item_imgs.resize(item_count);
+			cached_menu_item_hl_imgs.resize(item_count);
+			for (int i = 0; i < item_count; i++) {
+				string txt = m.get_item_text(i);
+				cached_menu_items[i] = txt;
+				@cached_menu_item_imgs[i] = font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+				@cached_menu_item_hl_imgs[i] = font_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+			}
+		}
+		int start_y = 120;
+		int line_height = 40;
+		int sel_index = m.get_focused_item();
+		for(int i = 0; i < item_count; i++) {
+			string itemText = cached_menu_items[i];
+			uint64 itemDim = g_window.measure_text(itemText);
+			int itemW = int(itemDim >> 32);
+			int iw = itemW + 20;
+			int ix = 400 - (iw / 2);
+			int iy = start_y + i * line_height - 5;
+			int ih = line_height;
+			if (MOUSE_AVAILABLE && mouseX >= ix && mouseX <= ix + iw && mouseY >= iy && mouseY <= iy + ih) {
+				if (sel_index != i && (MOUSE_X != 0 || MOUSE_Y != 0)) {
+					m.set_focused_item(i);
+					sel_index = i;
+				}
+				if (mouse_pressed(1)) {
+					m.set_focused_item(i);
+					simulate_key_down(KEY_RETURN);
+					simulate_key_up(KEY_RETURN);
+				}
+			}
+			graphic@ img_to_draw = null;
+			if (i == sel_index) {
+				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
+				@img_to_draw = cached_menu_item_hl_imgs[i];
+			} else {
+				@img_to_draw = cached_menu_item_imgs[i];
+			}
+			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, 400 - (itemW / 2), start_y + i * line_height);
+		}
 	}
 	void draw_form(audio_form@ f) {
-		if (!initialized || !enabled || @f == null) return;
+		if (!initialized || !enabled || @f == null || @font_obj == null) return;
+		mouse_update();
+		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
+		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
 		int focused = f.get_current_focus();
 		int y = 60;
 		int startX = 50;
-		gfx.draw_text("Quizzy Form", 50, 20, current_theme.text.r, current_theme.text.g, current_theme.text.b);
-		gfx.draw_line(50, 50, 750, 50, 200, 200, 200, 1);
-		for(int i=0; i<f.get_control_count(); i++) {
+		if (cached_form_title == "") {
+			cached_form_title = "Quizzy Form";
+			@cached_form_title_img = font_obj.render_text_blended(cached_form_title, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+		}
+		if (@cached_form_title_img != null) g_window.renderer.render_graphic(cached_form_title_img, 50, 20);
+		g_window.draw_line(50, 50, 750, 50, 200, 200, 200);
+		int ctrl_count = f.get_control_count();
+		if (uint(ctrl_count) != cached_form_caps.length()) {
+			cached_form_caps.resize(ctrl_count);
+			cached_form_cap_imgs.resize(ctrl_count);
+			cached_form_cap_hl_imgs.resize(ctrl_count);
+		}
+		for(int i = 0; i < ctrl_count; i++) {
 			if (!f.is_visible(i)) continue;
 			int type = f.get_control_type(i);
 			string cap = f.get_caption(i);
-			bool is_focused = (i == focused);
-			int r = is_focused ? current_theme.highlight_text.r : current_theme.text.r;
-			int g = is_focused ? current_theme.highlight_text.g : current_theme.text.g;
-			int b = is_focused ? current_theme.highlight_text.b : current_theme.text.b;
 			if (type == 1) { cap = cap + ": " + f.get_text(i); }
 			else if (type == 2) { cap = (f.is_checked(i) ? "[X] " : "[ ] ") + cap; }
 			else if (type == 5) { 
@@ -186,9 +322,36 @@ class graphics_manager {
 				else cap += ": (None)";
 			}
 			else if (type == 6) { cap = cap + ": < " + f.get_slider(i) + " >"; }
-			gfx.draw_text(cap, startX, y, r, g, b);
-			if (is_focused) { gfx.draw_rect(startX - 15, y + 5, 10, 10, r, g, b, true); }
-			y += 40;
+			if (cap != cached_form_caps[i]) {
+				cached_form_caps[i] = cap;
+				@cached_form_cap_imgs[i] = font_obj.render_text_blended(cap, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+				@cached_form_cap_hl_imgs[i] = font_obj.render_text_blended(cap, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+			}
+			int h = 40;
+			if (MOUSE_AVAILABLE && mouseY >= y && mouseY <= y + h && mouseX >= startX && mouseX <= startX + 700) {
+				if (f.get_current_focus() != i && (MOUSE_X != 0 || MOUSE_Y != 0)) {
+					f.focus(i);
+					focused = i;
+				}
+				if (mouse_pressed(1)) {
+					f.focus(i);
+					focused = i;
+					if (type == 3 || type == 4) {
+						simulate_key_down(KEY_RETURN);
+						simulate_key_up(KEY_RETURN);
+					} else if (type == 2) {
+						simulate_key_down(KEY_SPACE);
+						simulate_key_up(KEY_SPACE);
+					}
+				}
+			}
+			bool is_focused = (i == focused);
+			graphic@ img_to_draw = is_focused ? cached_form_cap_hl_imgs[i] : cached_form_cap_imgs[i];
+			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, startX, y);
+			if (is_focused) {
+				g_window.draw_rect(startX - 15, y + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+			}
+			y += h;
 		}
 	}
 }
