@@ -178,7 +178,7 @@ class graphics_manager {
 			}
 			graphics_texture@ img_to_draw = null;
 			if (int(i) == selected_index) {
-				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
+				g_window.draw_rect(45, start_y + i * line_height + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b, true);
 				@img_to_draw = cached_opt_hl_imgs[i];
 			} else {
 				@img_to_draw = cached_opt_imgs[i];
@@ -223,7 +223,7 @@ class graphics_manager {
 			bool is_milestone = (i == 4 || i == 9 || i == 15);
 			graphics_texture@ img_to_draw = cached_prize_imgs[i];
 			if (i == current_index) {
-				g_window.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0);
+				g_window.draw_rect(start_x - 15, start_y + (num_prizes - 1 - i) * line_height + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b, true);
 				@img_to_draw = cached_prize_hl_imgs[i];
 			} else if (i < current_index) {
 				@img_to_draw = cached_prize_comp_imgs[i];
@@ -294,7 +294,7 @@ class graphics_manager {
 			}
 			graphics_texture@ img_to_draw = null;
 			if (i == sel_index) {
-				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
+				g_window.draw_rect(400 - (itemW / 2) - 15, start_y + i * line_height + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b, true);
 				@img_to_draw = cached_menu_item_hl_imgs[i];
 			} else {
 				@img_to_draw = cached_menu_item_imgs[i];
@@ -361,7 +361,7 @@ class graphics_manager {
 			graphics_texture@ img_to_draw = is_focused ? cached_form_cap_hl_imgs[i] : cached_form_cap_imgs[i];
 			if (@img_to_draw != null) g_window.renderer.render_texture(img_to_draw, startX, y);
 			if (is_focused) {
-				g_window.draw_rect(startX - 15, y + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+				g_window.draw_rect(startX - 15, y + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b, true);
 			}
 			y += h;
 		}
