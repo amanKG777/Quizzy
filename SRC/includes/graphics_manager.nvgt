@@ -35,30 +35,31 @@ class graphics_manager {
 	bool high_contrast = false;
 	string current_font = "arial";
 	text_font@ font_obj = null;
-	graphic@ logo_img = null;
+	text_font@ font_bold_obj = null;
+	graphics_texture@ logo_img = null;
 	Theme@ classic_theme;
 	Theme@ hc_theme;
 	Theme@ current_theme;
 	string cached_q_text;
-	graphic@ cached_q_img;
+	graphics_texture@ cached_q_img;
 	string[] cached_opt_texts;
-	graphic@[] cached_opt_imgs;
-	graphic@[] cached_opt_hl_imgs;
+	graphics_texture@[] cached_opt_imgs;
+	graphics_texture@[] cached_opt_hl_imgs;
 	string[] cached_prize_texts;
-	graphic@[] cached_prize_imgs;
-	graphic@[] cached_prize_hl_imgs;
-	graphic@[] cached_prize_ms_imgs;
-	graphic@[] cached_prize_comp_imgs;
+	graphics_texture@[] cached_prize_imgs;
+	graphics_texture@[] cached_prize_hl_imgs;
+	graphics_texture@[] cached_prize_ms_imgs;
+	graphics_texture@[] cached_prize_comp_imgs;
 	string cached_menu_title;
-	graphic@ cached_menu_title_img;
+	graphics_texture@ cached_menu_title_img;
 	string[] cached_menu_items;
-	graphic@[] cached_menu_item_imgs;
-	graphic@[] cached_menu_item_hl_imgs;
+	graphics_texture@[] cached_menu_item_imgs;
+	graphics_texture@[] cached_menu_item_hl_imgs;
 	string cached_form_title;
-	graphic@ cached_form_title_img;
+	graphics_texture@ cached_form_title_img;
 	string[] cached_form_caps;
-	graphic@[] cached_form_cap_imgs;
-	graphic@[] cached_form_cap_hl_imgs;
+	graphics_texture@[] cached_form_cap_imgs;
+	graphics_texture@[] cached_form_cap_hl_imgs;
 	graphics_manager() {
 		@classic_theme = Theme(Color(0, 0, 50), Color(255, 255, 255), Color(150, 150, 255), Color(100, 100, 100), Color(255, 255, 0), Color(255, 215, 0), Color(100, 255, 100));
 		@hc_theme = Theme(Color(0, 0, 0), Color(255, 255, 255), Color(255, 255, 255), Color(255, 255, 255), Color(0, 0, 0), Color(255, 255, 0), Color(0, 255, 0));
@@ -68,8 +69,9 @@ class graphics_manager {
 		if (initialized) return true;
 		if (true) {
 			initialized = true;
+			g_window.renderer.set_vsync(1);
 			update_font(current_font);
-			@logo_img = load_surface("LOGO.png");
+			@logo_img = g_window.renderer.create_texture(load_surface("LOGO.png"));
 			return true;
 		}
 		return false;
@@ -78,21 +80,31 @@ class graphics_manager {
 		if (!initialized || !enabled) return;
 		current_font = font_name;
 		int size = 20;
-		if (font_name == "hindi") {
-			@font_obj = get_font("fonts/NotoSansDevanagari-Regular.ttf", size);
-		} else {
-			@font_obj = get_font(font_name, size);
-		}
+		@font_obj = get_font("fonts/NotoSansDevanagari-Regular.ttf", size);
+		@font_bold_obj = get_font("fonts/NotoSansDevanagari-Bold.ttf", size);
 		clear_cache();
 	}
 	void clear_cache() {
 		cached_q_text = "";
+		@cached_q_img = null;
 		cached_opt_texts.resize(0);
+		cached_opt_imgs.resize(0);
+		cached_opt_hl_imgs.resize(0);
 		cached_prize_texts.resize(0);
+		cached_prize_imgs.resize(0);
+		cached_prize_hl_imgs.resize(0);
+		cached_prize_ms_imgs.resize(0);
+		cached_prize_comp_imgs.resize(0);
 		cached_menu_title = "";
+		@cached_menu_title_img = null;
 		cached_menu_items.resize(0);
+		cached_menu_item_imgs.resize(0);
+		cached_menu_item_hl_imgs.resize(0);
 		cached_form_title = "";
+		@cached_form_title_img = null;
 		cached_form_caps.resize(0);
+		cached_form_cap_imgs.resize(0);
+		cached_form_cap_hl_imgs.resize(0);
 	}
 	void prepare_frame() {
 		if (!initialized || !enabled) return;
@@ -111,19 +123,19 @@ class graphics_manager {
 		if (!initialized || !enabled) return;
 		g_window.clear(10, 10, 15);
 		if (@logo_img != null) {
-			g_window.renderer.render_graphic(logo_img, 0, 0, logo_img.width, logo_img.height, 400 - 150, 300 - 150, 300, 300);
+			g_window.renderer.render_texture(logo_img, 0, 0, logo_img.width, logo_img.height, 400 - 150, 300 - 150, 300, 300);
 		}
 	}
 	int draw_question(string question_text, string[] options, int selected_index) {
-		if (!initialized || !enabled || @font_obj == null) return -1;
+		if (!initialized || !enabled || @font_obj == null || @font_bold_obj == null) return -1;
 		mouse_update();
 		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
 		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
 		if (question_text != cached_q_text) {
 			cached_q_text = question_text;
-			@cached_q_img = font_obj.render_text_blended_wrapped(question_text, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+			@cached_q_img = g_window.renderer.create_texture(font_bold_obj.render_text_blended_wrapped(question_text, 550, current_theme.text.r, current_theme.text.g, current_theme.text.b));
 		}
-		if (@cached_q_img != null) g_window.renderer.render_graphic(cached_q_img, 50, 50);
+		if (@cached_q_img != null) g_window.renderer.render_texture(cached_q_img, 50, 50);
 		bool options_changed = false;
 		if (options.length() != cached_opt_texts.length()) {
 			options_changed = true;
@@ -140,8 +152,8 @@ class graphics_manager {
 			cached_opt_imgs.resize(options.length());
 			cached_opt_hl_imgs.resize(options.length());
 			for (uint i = 0; i < options.length(); i++) {
-				@cached_opt_imgs[i] = font_obj.render_text_blended(options[i], current_theme.text.r, current_theme.text.g, current_theme.text.b);
-				@cached_opt_hl_imgs[i] = font_obj.render_text_blended(options[i], current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+				@cached_opt_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(options[i], current_theme.text.r, current_theme.text.g, current_theme.text.b));
+				@cached_opt_hl_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(options[i], current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b));
 			}
 		}
 		int start_y = 200;
@@ -164,19 +176,19 @@ class graphics_manager {
 					simulate_key_up(KEY_RETURN);
 				}
 			}
-			graphic@ img_to_draw = null;
+			graphics_texture@ img_to_draw = null;
 			if (int(i) == selected_index) {
 				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
 				@img_to_draw = cached_opt_hl_imgs[i];
 			} else {
 				@img_to_draw = cached_opt_imgs[i];
 			}
-			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, 60, start_y + i * line_height);
+			if (@img_to_draw != null) g_window.renderer.render_texture(img_to_draw, 60, start_y + i * line_height);
 		}
 		return newly_focused;
 	}
 	void draw_prize_ladder(int current_index, string[]@ prizes) {
-		if (!initialized || !enabled || @prizes == null || @font_obj == null) return;
+		if (!initialized || !enabled || @prizes == null || @font_obj == null || @font_bold_obj == null) return;
 		bool prizes_changed = false;
 		if (prizes.length() != cached_prize_texts.length()) {
 			prizes_changed = true;
@@ -197,10 +209,10 @@ class graphics_manager {
 			cached_prize_comp_imgs.resize(len);
 			for (uint i = 0; i < len; i++) {
 				string txt = (i + 1) + ": ₹" + prizes[i];
-				@cached_prize_imgs[i] = font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b);
-				@cached_prize_hl_imgs[i] = font_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
-				@cached_prize_ms_imgs[i] = font_obj.render_text_blended(txt, current_theme.milestone.r, current_theme.milestone.g, current_theme.milestone.b);
-				@cached_prize_comp_imgs[i] = font_obj.render_text_blended(txt, current_theme.completed.r, current_theme.completed.g, current_theme.completed.b);
+				@cached_prize_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b));
+				@cached_prize_hl_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b));
+				@cached_prize_ms_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(txt, current_theme.milestone.r, current_theme.milestone.g, current_theme.milestone.b));
+				@cached_prize_comp_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(txt, current_theme.completed.r, current_theme.completed.g, current_theme.completed.b));
 			}
 		}
 		int start_x = 600;
@@ -209,7 +221,7 @@ class graphics_manager {
 		int num_prizes = int(prizes.length());
 		for (int i = num_prizes - 1; i >= 0; i--) {
 			bool is_milestone = (i == 4 || i == 9 || i == 15);
-			graphic@ img_to_draw = cached_prize_imgs[i];
+			graphics_texture@ img_to_draw = cached_prize_imgs[i];
 			if (i == current_index) {
 				g_window.draw_rect(start_x - 5, start_y + (num_prizes - 1 - i) * line_height - 2, 190, line_height, 0, 100, 0);
 				@img_to_draw = cached_prize_hl_imgs[i];
@@ -218,22 +230,22 @@ class graphics_manager {
 			} else if (is_milestone) {
 				@img_to_draw = cached_prize_ms_imgs[i];
 			}
-			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, start_x, start_y + (num_prizes - 1 - i) * line_height);
+			if (@img_to_draw != null) g_window.renderer.render_texture(img_to_draw, start_x, start_y + (num_prizes - 1 - i) * line_height);
 		}
 	}
 	void draw_menu(menu@ m) {
-		if (!initialized || !enabled || @m == null || @font_obj == null) return;
+		if (!initialized || !enabled || @m == null || @font_obj == null || @font_bold_obj == null) return;
 		mouse_update();
 		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
 		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
 		string title = m.intro_text != "" ? m.intro_text : "Menu";
 		if (title != cached_menu_title) {
 			cached_menu_title = title;
-			@cached_menu_title_img = font_obj.render_text_blended(title, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+			@cached_menu_title_img = g_window.renderer.create_texture(font_bold_obj.render_text_blended(title, current_theme.text.r, current_theme.text.g, current_theme.text.b));
 		}
 		uint64 size = g_window.measure_text(title);
 		int w = size >> 32;
-		if (@cached_menu_title_img != null) g_window.renderer.render_graphic(cached_menu_title_img, 400 - (w / 2), 50);
+		if (@cached_menu_title_img != null) g_window.renderer.render_texture(cached_menu_title_img, 400 - (w / 2), 50);
 		g_window.draw_line(100, 95, 700, 95, current_theme.accent.r, current_theme.accent.g, current_theme.accent.b);
 		int item_count = m.get_item_count();
 		bool items_changed = false;
@@ -254,8 +266,8 @@ class graphics_manager {
 			for (int i = 0; i < item_count; i++) {
 				string txt = m.get_item_text(i);
 				cached_menu_items[i] = txt;
-				@cached_menu_item_imgs[i] = font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b);
-				@cached_menu_item_hl_imgs[i] = font_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+				@cached_menu_item_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b));
+				@cached_menu_item_hl_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b));
 			}
 		}
 		int start_y = 120;
@@ -280,18 +292,18 @@ class graphics_manager {
 					simulate_key_up(KEY_RETURN);
 				}
 			}
-			graphic@ img_to_draw = null;
+			graphics_texture@ img_to_draw = null;
 			if (i == sel_index) {
 				g_window.draw_rect(ix, iy, iw, ih, current_theme.highlight_bg.r, current_theme.highlight_bg.g, current_theme.highlight_bg.b, !high_contrast);
 				@img_to_draw = cached_menu_item_hl_imgs[i];
 			} else {
 				@img_to_draw = cached_menu_item_imgs[i];
 			}
-			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, 400 - (itemW / 2), start_y + i * line_height);
+			if (@img_to_draw != null) g_window.renderer.render_texture(img_to_draw, 400 - (itemW / 2), start_y + i * line_height);
 		}
 	}
 	void draw_form(audio_form@ f) {
-		if (!initialized || !enabled || @f == null || @font_obj == null) return;
+		if (!initialized || !enabled || @f == null || @font_obj == null || @font_bold_obj == null) return;
 		mouse_update();
 		float mouseX = (MOUSE_ABSOLUTE_X / float(get_window_width())) * 800.0f;
 		float mouseY = (MOUSE_ABSOLUTE_Y / float(get_window_height())) * 600.0f;
@@ -300,9 +312,9 @@ class graphics_manager {
 		int startX = 50;
 		if (cached_form_title == "") {
 			cached_form_title = "Quizzy Form";
-			@cached_form_title_img = font_obj.render_text_blended(cached_form_title, current_theme.text.r, current_theme.text.g, current_theme.text.b);
+			@cached_form_title_img = g_window.renderer.create_texture(font_bold_obj.render_text_blended(cached_form_title, current_theme.text.r, current_theme.text.g, current_theme.text.b));
 		}
-		if (@cached_form_title_img != null) g_window.renderer.render_graphic(cached_form_title_img, 50, 20);
+		if (@cached_form_title_img != null) g_window.renderer.render_texture(cached_form_title_img, 50, 20);
 		g_window.draw_line(50, 50, 750, 50, 200, 200, 200);
 		int ctrl_count = f.get_control_count();
 		if (uint(ctrl_count) != cached_form_caps.length()) {
@@ -324,8 +336,8 @@ class graphics_manager {
 			else if (type == 6) { cap = cap + ": < " + f.get_slider(i) + " >"; }
 			if (cap != cached_form_caps[i]) {
 				cached_form_caps[i] = cap;
-				@cached_form_cap_imgs[i] = font_obj.render_text_blended(cap, current_theme.text.r, current_theme.text.g, current_theme.text.b);
-				@cached_form_cap_hl_imgs[i] = font_obj.render_text_blended(cap, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
+				@cached_form_cap_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(cap, current_theme.text.r, current_theme.text.g, current_theme.text.b));
+				@cached_form_cap_hl_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(cap, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b));
 			}
 			int h = 40;
 			if (MOUSE_AVAILABLE && mouseY >= y && mouseY <= y + h && mouseX >= startX && mouseX <= startX + 700) {
@@ -346,8 +358,8 @@ class graphics_manager {
 				}
 			}
 			bool is_focused = (i == focused);
-			graphic@ img_to_draw = is_focused ? cached_form_cap_hl_imgs[i] : cached_form_cap_imgs[i];
-			if (@img_to_draw != null) g_window.renderer.render_graphic(img_to_draw, startX, y);
+			graphics_texture@ img_to_draw = is_focused ? cached_form_cap_hl_imgs[i] : cached_form_cap_imgs[i];
+			if (@img_to_draw != null) g_window.renderer.render_texture(img_to_draw, startX, y);
 			if (is_focused) {
 				g_window.draw_rect(startX - 15, y + 5, 10, 10, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b);
 			}

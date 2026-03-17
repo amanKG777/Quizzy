@@ -39,7 +39,6 @@ class PlayQuestionScene {
 		string lifeline_double_label = "Lifeline: Double Dip";
 		string lifeline_expert_label = "Lifeline: Ask an Expert";
 		string quit_label = "Quit Game";
-
 		if (state.current_lang == "fr") {
 			q_label = "Question";
 			prize_label = "Progression des prix";
@@ -65,7 +64,6 @@ class PlayQuestionScene {
 			lifeline_expert_label = "लाइफलाइन: आस्क एन एक्सपर्ट";
 			quit_label = "खेल छोड़ें";
 		}
-
 		f.create_window("Quizzy", false);
 		q_field = f.create_input_box(q_label, q.question, "", 0, true, true);
 		int progress_list = f.create_list(prize_label);
@@ -157,7 +155,6 @@ class PlayQuestionScene {
 			milestone_text = " - मील का पत्थर";
 			current_text = " - वर्तमान";
 		}
-
 		string ladder = label;
 		for (int j = int(prizes.length()) - 1; j >= 0; j--) {
 			string marker = "";
@@ -175,7 +172,6 @@ class PlayQuestionScene {
 		if (state.lifeline_double_dip) lifelines_left++;
 		if (state.lifeline_expert) lifelines_left++;
 		string current_prize = (question_index > 0) ? prizes[question_index - 1] : "0";
-		
 		string status;
 		if (state.current_lang == "fr") {
 			status = "Prix actuel : ₹" + current_prize + ". Questions restantes : " + (questions.length() - question_index) + ". Atouts restants : " + lifelines_left + ".";
