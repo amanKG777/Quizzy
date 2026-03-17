@@ -7,7 +7,7 @@
 #include "includes/*.nvgt"
 #include "touch.nvgt"
 #include "settings.nvgt"
-const string GAME_VERSION = "1.1.1";
+const string GAME_VERSION = "1.2.0";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
 
