@@ -1,5 +1,6 @@
 #pragma asset "sounds.dat"
 #pragma asset "LOGO.png"
+#pragma asset "fonts"
 #include "menu.nvgt"
 #include "form.nvgt"
 #include "updater.nvgt"
@@ -7,7 +8,7 @@
 #include "includes/*.nvgt"
 #include "touch.nvgt"
 #include "settings.nvgt"
-const string GAME_VERSION = "1.2.0";
+const string GAME_VERSION = "1.2.1";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
 

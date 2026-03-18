@@ -1,7 +1,7 @@
 ; Inno Setup Script for Quizzy
 #define AppName "Quizzy"
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.2.1"
 #endif
 #define AppPublisher "Boostof Studios"
 #define AppURL "https://github.com/amanKG777/Quizzy"
@@ -34,7 +34,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "Quizzy\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Quizzy\sounds.dat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Quizzy\LOGO.png"; DestDir: "{app}"; Flags: ignoreversion
-Source: "lib\graphics.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
+Source: "Quizzy\fonts\*.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
 Source: "lib\notifications.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "lib\voice_command.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "Quizzy\lib\nvdaControllerClient64.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
