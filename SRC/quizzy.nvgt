@@ -8,10 +8,10 @@
 #include "includes/*.nvgt"
 #include "touch.nvgt"
 #include "settings.nvgt"
+
 const string GAME_VERSION = "1.2.1";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
-
 updater game_updater(GAME_VERSION, GITHUB_REPO_OWNER, GITHUB_REPO_NAME);
 
 void check_for_updates(bool silent_on_no_update) {
@@ -25,15 +25,15 @@ int ask_yes_no(string title, string text) {
 	m.add_item("No", "2");
 	m.intro_text = text;
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			if (m.selected_item_id == "") continue;
 			return parse_int(m.selected_item_id);
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 	return 2;
 }
@@ -47,7 +47,7 @@ void play_sfx(string filename, bool wait_for_completion = false) {
 			s.volume = 0; 
 			s.play();
 			while (s.playing) {
-				wait(5);
+				wait(0);
 				app.touch.monitor();
 				if (gm.initialized) {
 					gm.prepare_frame();
@@ -68,7 +68,7 @@ void play_sfx(string filename, bool wait_for_completion = false) {
 		int slot = app.pool.play_stationary(filename, false);
 		if (slot < 0) slot = app.pool.play_stationary("sounds/" + filename, false);
 		if (slot >= 0) {
-			app.pool.update_sound_start_values(slot, 0, 0, 100); 
+			app.pool.update_sound_start_values(slot, 0, 0, 100);
 		}
 	}
 }
@@ -140,14 +140,15 @@ void main() {
 			intro.play();
 			timer intro_timer;
 			while (intro_timer.elapsed < 22000) {
-				wait(5);
+				wait(0);
 				app.touch.monitor();
-				gm.draw_logo();
-				gm.present_frame();
 				if (key_pressed(KEY_RETURN)) {
 					intro.stop();
 					break;
 				}
+				gm.prepare_frame();
+				gm.draw_logo();
+				gm.present_frame();
 			}
 		}
 	}
@@ -172,16 +173,16 @@ string select_language() {
 	m.intro_text = "Select your preferred language.";
 	string lang = "en";
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			lang = m.selected_item_id;
 			if (lang == "" || lang == "back") return "back";
 			break;
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 	return lang;
 }
@@ -210,16 +211,16 @@ int select_category() {
 	m.intro_text = "Select a category.";
 	int cat_id = 0;
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			if (m.selected_item_id == "back" || m.selected_item_id == "") return -1;
 			cat_id = parse_int(m.selected_item_id);
 			break;
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 	return cat_id;
 }
@@ -272,11 +273,8 @@ void settings_menu() {
 	int btn_cancel = f.create_button("Cancel", false, true);
 	f.focus(chk_startup);
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_form(f);
-		gm.present_frame();
 		f.monitor();
 		if (f.is_pressed(btn_check_now)) {
 			check_for_updates(false);
@@ -325,6 +323,9 @@ void settings_menu() {
 		if (f.is_pressed(btn_cancel)) {
 			break;
 		}
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
 	}
 }
 
@@ -344,11 +345,8 @@ void manage_custom_packs_menu() {
 		m.add_item("Back", "back");
 		while (true) {
 			m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-			wait(5);
+			wait(0);
 			app.touch.monitor();
-			gm.prepare_frame();
-			gm.draw_menu(m);
-			gm.present_frame();
 			if (!m.monitor()) {
 				string choice = m.selected_item_id;
 				if (choice.starts_with("file_")) {
@@ -368,6 +366,9 @@ void manage_custom_packs_menu() {
 					return;
 				}
 			}
+			gm.prepare_frame();
+			gm.draw_menu(m);
+			gm.present_frame();
 		}
 	}
 }
@@ -382,11 +383,8 @@ void custom_pack_actions_menu(string filename) {
 	m.intro_text = "Select an action for the pack: " + filename;
 	while (true) {
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "play") {
@@ -410,6 +408,9 @@ void custom_pack_actions_menu(string filename) {
 				break;
 			}
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 }
 
@@ -445,13 +446,13 @@ void show_credits() {
 	int ok_btn = f.create_button("Back", true, true);
 	f.focus(ok_btn);
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
+		f.monitor();
+		if (f.is_pressed(ok_btn)) break;
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();
-		f.monitor();
-		if (f.is_pressed(ok_btn)) break;
 	}
 }
 
@@ -469,12 +470,9 @@ void main_menu() {
 	m.intro_text = "Welcome to quizzy! Select an option.";
 	while (true) {
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-		wait(5);
+		wait(0);
 		app.touch.monitor();
 		app.input.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "start") {
@@ -518,6 +516,9 @@ void main_menu() {
 				exit();
 			}
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 }
 
@@ -565,7 +566,7 @@ void game_loop() {
 			return;
 		}
 		if (!state.blitz_played && !blitz_fetching && !blitz_ready && (i >= 6 || state.lifelines_used_count >= 2)) {
-			@blitz_fetch_handle = async<void>(init_questions_bg, state.current_lang, 0, 20, true); 
+			@blitz_fetch_handle = async<void>(init_questions_bg, state.current_lang, 0, 20, true);
 		}
 		if (!state.blitz_played && (i == 9 || state.lifelines_used_count >= 4)) {
 			string reason = (i == 9) ? "You have reached Question 10." : "You have used 4 or more lifelines.";
@@ -581,7 +582,7 @@ void game_loop() {
 		if (app.manual_next_question && i < questions.length() - 1) {
 			speak("Correct answer. Press enter to continue to the next question.", false);
 			while (!key_pressed(KEY_RETURN)) {
-				wait(5);
+				wait(0);
 				app.touch.monitor();
 				gm.prepare_frame();
 				gm.draw_logo();
@@ -650,7 +651,7 @@ bool handle_option_selection(QuizSession@ session, int i, int[]& option_buttons,
 			lock_sfx.play();
 			timer wait_timer;
 			while (wait_timer.elapsed < 5000) {
-				wait(5);
+				wait(0);
 				app.touch.monitor();
 				gm.prepare_frame();
 				gm.draw_question(session.current_question.question, session.current_question.options, current_selection);
@@ -667,7 +668,7 @@ bool handle_option_selection(QuizSession@ session, int i, int[]& option_buttons,
 			heartbeat_sfx.play();
 			timer wait_timer;
 			while (wait_timer.elapsed < 4000) {
-				wait(5);
+				wait(0);
 				app.touch.monitor();
 				gm.prepare_frame();
 				gm.draw_question(session.current_question.question, session.current_question.options, current_selection);
@@ -714,7 +715,7 @@ void blitz_round() {
 	if (blitz_fetching) {
 		speak("Please wait, blitz questions are still loading...", false);
 		while (blitz_fetching) {
-			wait(5);
+			wait(0);
 			app.touch.monitor();
 			gm.prepare_frame();
 			gm.draw_logo();
@@ -741,7 +742,7 @@ void blitz_round() {
 	for (uint i = 0; i < blitz_pool.length(); i++) {
 		if (blitz_timer.elapsed >= time_limit) break;
 		Question@ q = blitz_pool[i];
-		blitz_mutex.unlock(); 
+		blitz_mutex.unlock();
 		audio_form f;
 		f.create_window("BLITZ ROUND - Time Left: " + ((time_limit - blitz_timer.elapsed) / 1000) + "s", false);
 		f.create_input_box("Question", q.question, "", 0, true, true);
@@ -752,19 +753,9 @@ void blitz_round() {
 		f.focus(option_buttons[0]);
 		bool answered = false;
 		while (blitz_timer.elapsed < time_limit && !answered) {
-			wait(5);
+			wait(0);
 			app.touch.monitor();
 			f.monitor();
-			gm.prepare_frame();
-			int current_selection = -1;
-			for (uint j = 0; j < option_buttons.length(); j++) {
-				if (f.get_current_focus() == option_buttons[j]) {
-					current_selection = j;
-					break;
-				}
-			}
-			gm.draw_question(q.question, q.options, current_selection);
-			gm.present_frame();
 			for (uint j = 0; j < option_buttons.length(); j++) {
 				if (f.is_pressed(option_buttons[j])) {
 					answered = true;
@@ -777,6 +768,17 @@ void blitz_round() {
 					break;
 				}
 			}
+			if (answered) break;
+			int current_selection = -1;
+			for (uint j = 0; j < option_buttons.length(); j++) {
+				if (f.get_current_focus() == option_buttons[j]) {
+					current_selection = j;
+					break;
+				}
+			}
+			gm.prepare_frame();
+			gm.draw_question(q.question, q.options, current_selection);
+			gm.present_frame();
 		}
 		if (blitz_timer.elapsed >= time_limit) break;
 		blitz_mutex.lock(); 
@@ -793,11 +795,8 @@ void blitz_round() {
 	m.intro_text = "Select your reward.";
 	while (true) {
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "money") {
@@ -813,6 +812,9 @@ void blitz_round() {
 				break;
 			}
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 }
 
@@ -835,11 +837,8 @@ void retrieve_lifeline_menu() {
 	m.intro_text = "Select a lifeline to retrieve for ₹25,000. Current Bonus: ₹" + state.bonus_money;
 	while (true) {
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
-		wait(5);
+		wait(0);
 		app.touch.monitor();
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 		if (!m.monitor()) {
 			string choice = m.selected_item_id;
 			if (choice == "back" || choice == "") break;
@@ -856,6 +855,9 @@ void retrieve_lifeline_menu() {
 			}
 			break;
 		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
 	}
 }
 
@@ -901,12 +903,12 @@ void show_audience_poll(Question@ q) {
 	int ok_btn = f.create_button("OK", true, true);
 	f.focus(poll_box);
 	while (true) {
-		wait(5);
+		wait(0);
 		app.touch.monitor();
+		f.monitor();
+		if (f.is_pressed(ok_btn)) break;
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();
-		f.monitor();
-		if (f.is_pressed(ok_btn)) break;
 	}
 }
