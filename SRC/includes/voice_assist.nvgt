@@ -10,22 +10,18 @@ class VoiceAssist {
 	private string[] temporary_commands;
 	private string last_menu_sync = "";
 	private bool listening = false;
-	
 	bool manual_next_enabled = false;
 	bool active = false;
-	
 	VoiceAssist() {
 		@snd_wake = generate_tone(880, 100); 
 		@snd_fail = generate_tone(440, 100); 
 		@snd_success = generate_tone(1200, 50);
 	}
-	
 	private sound@ generate_tone(double freq, int ms) {
 		tone_synth s;
 		s.freq_ms(freq, ms);
 		return s.write_wave_sound();
 	}
-	
 	bool setup() {
 		if (available) return true;
 #if !android
@@ -38,7 +34,6 @@ class VoiceAssist {
 #endif
 		return false;
 	}
-	
 	void clear_commands() {
 		if (available) {
 #if !android
@@ -50,7 +45,6 @@ class VoiceAssist {
 			listening = false;
 		}
 	}
-	
 	void add_command(const string&in cmd) {
 		if (available) {
 			string c = cmd.lower().trim_whitespace();
@@ -61,7 +55,6 @@ class VoiceAssist {
 #endif
 		}
 	}
-	
 	void start() {
 #if !android
 		if (available && !recognizer.get_active()) {
@@ -70,7 +63,6 @@ class VoiceAssist {
 		}
 #endif
 	}
-	
 	void stop() {
 #if !android
 		if (available && recognizer.get_active()) {
@@ -79,9 +71,7 @@ class VoiceAssist {
 		}
 #endif
 	}
-	
 	int levenshtein_distance(string s1, string s2) {
-// ... (rest of function unchanged)
 		int len1 = s1.length();
 		int len2 = s2.length();
 		if (len1 == 0) return len2;
@@ -103,28 +93,22 @@ class VoiceAssist {
 		}
 		return col[len2];
 	}
-	
 	string wait_for_command(bool draw_question = false, Question@ q = null, int sel = -1, int custom_timeout = 10000) {
 		while(screen_reader_is_speaking() || (app.voice.speaking)) {
 			update_ui(draw_question, q, sel);
 			wait(5);
 		}
-		
 		if (@snd_wake != null) snd_wake.play();
 		start();
-		
 		uint64 start_time = ticks();
 		uint64 timeout = uint64(custom_timeout); 
-		
 		while(ticks() - start_time < timeout) {
 			update_ui(draw_question, q, sel);
 			wait(5);
 			if (key_pressed(KEY_ESCAPE)) return "exit";
-			
 			if (recognizer.get_commands_pending() > 0) {
 				string heard = recognizer.get_command().lower().trim_whitespace();
 				if (heard == "") continue;
-				
 				if (heard == "report progress" || heard == "status") {
 					if (g_fetch_action != "") {
 						speak_wait("The system is currently " + g_fetch_action + ". Current progress is at " + g_fetch_progress + " percent.", false, draw_question, q, sel);
@@ -135,21 +119,18 @@ class VoiceAssist {
 					start();
 					continue;
 				}
-				
 				for (uint i = 0; i < temporary_commands.length(); i++) {
 					if (heard == temporary_commands[i]) {
 						if (@snd_success != null) snd_success.play();
 						return heard;
 					}
 				}
-				
 				for (uint i = 0; i < temporary_commands.length(); i++) {
 					if (temporary_commands[i] == "*") {
 						if (@snd_success != null) snd_success.play();
 						return heard;
 					}
 				}
-
 				string best_match = "";
 				int min_dist = 999;
 				for (uint i = 0; i < temporary_commands.length(); i++) {
@@ -160,7 +141,6 @@ class VoiceAssist {
 						best_match = temporary_commands[i];
 					}
 				}
-				
 				int threshold = (best_match.length() > 8) ? 3 : ((best_match.length() >= 5) ? 2 : 1);
 				if (best_match != "" && min_dist <= threshold) {
 					speak_wait("I understood '" + best_match + "'. Is this correct? Please confirm with 'Yes' or 'No'.", true, draw_question, q, sel);
@@ -183,11 +163,9 @@ class VoiceAssist {
 				}
 			}
 		}
-		
 		if (@snd_fail != null) snd_fail.play();
 		return "";
 	}
-	
 	string request_dictation(string prompt, bool draw_q = false, Question@ q = null, int sel = -1) {
 		while(true) {
 			speak_wait(prompt, true, draw_q, q, sel);
@@ -195,7 +173,6 @@ class VoiceAssist {
 			add_command("*");
 			string result = wait_for_command(draw_q, q, sel, 30000); 
 			if (result == "" || result == "exit" || result == "cancel") return result;
-			
 			speak_wait("I captured: '" + result + "'. Is this correct? Please say 'Yes' to confirm or 'No' to re-dictate.", true, draw_q, q, sel);
 			clear_commands();
 			add_command("yes");
@@ -207,7 +184,6 @@ class VoiceAssist {
 		}
 		return "";
 	}
-
 	void update_ui(bool draw_question, Question@ q, int sel) {
 		app.touch.monitor();
 		app.input.monitor();
@@ -220,7 +196,6 @@ class VoiceAssist {
 		}
 		gm.present_frame();
 	}
-	
 	void speak_wait(const string&in text, bool interrupt = true, bool draw_q = false, Question@ q = null, int sel = -1) {
 		speak(text, interrupt);
 		wait(500); 
@@ -240,9 +215,7 @@ void run_voice_assist_mode() {
 		return;
 	}
 	va.active = true;
-	
 	va.speak_wait("You have entered Voice Assist Mode. The system is fully operational and ready for your commands. You may navigate the entire application hands-free. If you need a list of available actions at any time, simply say 'Help'. To return to the standard interface, say 'Exit'.", true);
-	
 	while(true) {
 		va.clear_commands();
 		va.add_command("start game");
@@ -252,12 +225,9 @@ void run_voice_assist_mode() {
 		va.add_command("credits");
 		va.add_command("help");
 		va.add_command("exit");
-		
 		va.speak_wait("You are currently at the Main Menu screen. The options available here are: Start Game, Settings, Custom Packs, Statistics, and Credits. What would you like to do?", false);
-		
 		string cmd = va.wait_for_command();
 		if (cmd == "") continue;
-		
 		if (cmd == "start game") {
 			va_start_game();
 		} else if (cmd == "settings") {
@@ -295,12 +265,9 @@ void va_settings_menu() {
 		va.add_command("enable manual progression");
 		va.add_command("disable manual progression");
 		va.add_command("back");
-		
 		va.speak_wait("You are currently at the Settings screen. The options available here are to Enable or Disable: Menu Music, Startup Intro, Visuals, High Contrast, Heartbeat sound, and Manual Progression. Say 'Back' to return to the main menu.", false);
-		
 		string cmd = va.wait_for_command();
 		if (cmd == "") continue;
-		
 		if (cmd.find("music") != -1) {
 			bool enable = cmd.starts_with("enable");
 			app.config.write_string("menu_music_enabled", enable ? "true" : "false");
@@ -348,12 +315,10 @@ void va_categories_menu() {
 		va.speak_wait("You are currently at the Category Language Selection screen. Please state your preferred language for category browsing: English, Hindi, or French. Say 'Back' to return to the main menu.", true);
 		string lang_cmd = va.wait_for_command();
 		if (lang_cmd == "") continue;
-		
 		string lang = "en";
 		if (lang_cmd == "hindi") lang = "hi";
 		else if (lang_cmd == "french") lang = "fr";
 		else if (lang_cmd == "back" || lang_cmd == "exit") return;
-		
 		while(true) {
 			va.clear_commands();
 			va.add_command("random categories");
@@ -375,13 +340,10 @@ void va_categories_menu() {
 			va.add_command("art");
 			va.add_command("animals");
 			va.add_command("back");
-			
 			string cat_prompt = "You are currently selecting a trivia category for " + lang_cmd + ". The available categories are: Random Categories, General Knowledge, Books, Film, Music, Television, Video Games, Board Games, Science and Nature, Computers, Mathematics, Mythology, Sports, Geography, History, Politics, Art, and Animals. Please state your choice or say 'Back' to return to language selection.";
 			va.speak_wait(cat_prompt, false);
-			
 			string cat_cmd = va.wait_for_command();
 			if (cat_cmd == "") continue;
-			
 			int cat_id = -1;
 			if (cat_cmd == "random categories") cat_id = 0;
 			else if (cat_cmd == "general knowledge") cat_id = 9;
@@ -402,9 +364,7 @@ void va_categories_menu() {
 			else if (cat_cmd == "art") cat_id = 25;
 			else if (cat_cmd == "animals") cat_id = 27;
 			else if (cat_cmd == "back" || cat_cmd == "exit") break;
-			
 			if (cat_id == -1) continue;
-
 			while(true) {
 				va.clear_commands();
 				va.add_command("play");
@@ -413,7 +373,6 @@ void va_categories_menu() {
 				va.speak_wait("You have selected the '" + cat_cmd + "' category. Would you like to 'Play' this category immediately, or 'Download' it for offline accessibility?", true);
 				string action = va.wait_for_command();
 				if (action == "") continue;
-				
 				if (action == "download") {
 					va.speak_wait("The download process has been initiated. You may say 'Status' at any time to hear the progress.", true);
 					download_category(cat_id, lang);
@@ -441,11 +400,9 @@ void va_custom_packs_menu() {
 	while(true) {
 		string path = get_custom_questions_path();
 		string[] files = find_files(path + "*.json");
-		
 		va.clear_commands();
 		va.add_command("create");
 		va.add_command("back");
-		
 		string pack_list = "";
 		if (files.length() == 0) {
 			va.speak_wait("Your local custom question library is currently empty. You can say 'Create' to start building a new pack, or 'Back' to return to the main menu.", true);
@@ -458,10 +415,8 @@ void va_custom_packs_menu() {
 			}
 			va.speak_wait("You are currently at the Custom Packs screen. " + pack_list + ". Please state the name of a pack to manage it, say 'Create' to start a new pack, or 'Back' to return.", false);
 		}
-		
 		string cmd = va.wait_for_command();
 		if (cmd == "") continue;
-		
 		if (cmd == "create") {
 			va_create_pack();
 		} else if (cmd == "back" || cmd == "exit") {
@@ -479,27 +434,22 @@ void va_custom_packs_menu() {
 
 void va_create_pack() {
 	va.speak_wait("You have started the Voice-Driven Pack Creator. Please follow the auditory prompts carefully. You can say 'Cancel' at any time to discard the current pack.", true);
-	
 	string pack_name = va.request_dictation("Please state the desired name for your new question pack.");
 	if (pack_name == "" || pack_name == "cancel") {
 		va.speak_wait("Creation process aborted.");
 		return;
 	}
-	
 	json_object@ root = json_object();
 	root.set("name", pack_name);
 	json_array@ q_arr = json_array();
-	
 	while(true) {
 		va.speak_wait("Adding a new question to the '" + pack_name + "' collection.", true);
 		string q_text = va.request_dictation("Please dictate the text for the question.");
 		if (q_text == "" || q_text == "cancel") break;
-		
 		string o1 = va.request_dictation("Please dictate Option A.");
 		string o2 = va.request_dictation("Please dictate Option B.");
 		string o3 = va.request_dictation("Please dictate Option C.");
 		string o4 = va.request_dictation("Please dictate Option D.");
-		
 		int correct_idx = 0;
 		while(true) {
 			va.clear_commands();
@@ -507,12 +457,10 @@ void va_create_pack() {
 			va.speak_wait("Which of the options you provided is the correct answer? Please say A, B, C, or D.", true);
 			string correct_cmd = va.wait_for_command();
 			if (correct_cmd == "") continue;
-			
 			int temp_idx = 0;
 			if (correct_cmd == "b") temp_idx = 1;
 			else if (correct_cmd == "c") temp_idx = 2;
 			else if (correct_cmd == "d") temp_idx = 3;
-			
 			string letter = (temp_idx == 0 ? "A" : (temp_idx == 1 ? "B" : (temp_idx == 2 ? "C" : "D")));
 			string opt_text = (temp_idx == 0 ? o1 : (temp_idx == 1 ? o2 : (temp_idx == 2 ? o3 : o4)));
 			va.speak_wait("You have selected Option " + letter + ": '" + opt_text + "' as the correct answer. Is this correct? Please say 'Yes' or 'No'.", true);
@@ -525,7 +473,6 @@ void va_create_pack() {
 				break;
 			}
 		}
-		
 		json_object@ q_obj = json_object();
 		q_obj.set("question", q_text);
 		json_array@ opts = json_array();
@@ -533,7 +480,6 @@ void va_create_pack() {
 		q_obj.set("options", opts);
 		q_obj.set("correct_index", correct_idx);
 		q_arr.add(q_obj);
-		
 		va.clear_commands();
 		va.add_command("add another");
 		va.add_command("finish");
@@ -541,7 +487,6 @@ void va_create_pack() {
 		string next_action = va.wait_for_command();
 		if (next_action != "add another") break;
 	}
-	
 	if (q_arr.size() > 0) {
 		root.set("questions", q_arr);
 		string path = get_custom_questions_path();
@@ -563,7 +508,6 @@ void va_custom_pack_actions(string filename) {
 		va.speak_wait("You are currently managing the '" + short_name + "' pack. Your available actions are: 'Play', 'Delete', or 'Back'.", false);
 		string action = va.wait_for_command();
 		if (action == "") continue;
-		
 		if (action == "play") {
 			va.speak_wait("Loading custom question data for '" + short_name + "'. Preparing session.", true);
 			if (load_custom_questions(filename)) {
@@ -611,12 +555,10 @@ void va_start_game() {
 		va.speak_wait("New Session Configuration. Please state your preferred language: English, Hindi, or French. Say 'Back' to return to the main menu.", true);
 		string lang_cmd = va.wait_for_command();
 		if (lang_cmd == "") continue;
-		
 		string lang = "en";
 		if (lang_cmd == "hindi") lang = "hi";
 		else if (lang_cmd == "french") lang = "fr";
 		else if (lang_cmd == "back" || lang_cmd == "exit") return;
-		
 		while(true) {
 			va.clear_commands();
 			va.add_command("random categories");
@@ -638,12 +580,10 @@ void va_start_game() {
 			va.add_command("art");
 			va.add_command("animals");
 			va.add_command("back");
-			
 			string cat_prompt = "Please select a trivia category. The available options are: Random Categories, General Knowledge, Books, Film, Music, Television, Video Games, Board Games, Science and Nature, Computers, Mathematics, Mythology, Sports, Geography, History, Politics, Art, and Animals. State your selection or say 'Back'.";
 			va.speak_wait(cat_prompt, false);
 			string cat_cmd = va.wait_for_command();
 			if (cat_cmd == "") continue;
-			
 			int cat_id = -1;
 			if (cat_cmd == "random categories") cat_id = 0;
 			else if (cat_cmd == "general knowledge") cat_id = 9;
@@ -664,9 +604,7 @@ void va_start_game() {
 			else if (cat_cmd == "art") cat_id = 25;
 			else if (cat_cmd == "animals") cat_id = 27;
 			else if (cat_cmd == "back" || cat_cmd == "exit") break;
-			
 			if (cat_id == -1) continue;
-
 			while(true) {
 				va.clear_commands();
 				va.add_command("play");
@@ -675,7 +613,6 @@ void va_start_game() {
 				va.speak_wait("You have selected the '" + cat_cmd + "' category. Would you like to 'Play' this category immediately, or 'Download' it for offline accessibility?", true);
 				string action = va.wait_for_command();
 				if (action == "") continue;
-				
 				if (action == "download") {
 					va.speak_wait("The download process has been initiated. You may say 'Status' at any time to hear the progress.", true);
 					download_category(cat_id, lang);
@@ -703,7 +640,6 @@ void va_start_game() {
 
 void va_game_loop() {
 	 QuizSession session;
-	
 	for (uint i = 0; i < questions.length(); i++) {
 		state.current_question_index = i;
 		if (!va_play_question(session, questions[i], i)) {
@@ -712,14 +648,12 @@ void va_game_loop() {
 			va.speak_wait("Your trivia session has concluded. Returning to the main menu.", false); 
 			return; 
 		}
-		
 		if (i < 8) {
 			play_sfx("sahiJawab_10-02-26_16-31-59-720.mp3", true);
 		} else {
 			play_sfx("SahiJawab2_15-02-26_15-12-00-471.mp3", true);
 		}
 		va.speak_wait("That is the correct answer. Moving forward to the next round.", true);
-		
 		if (va.manual_next_enabled && i < questions.length() - 1) {
 			va.clear_commands();
 			va.add_command("next");
@@ -728,7 +662,6 @@ void va_game_loop() {
 			va.wait_for_command();
 		}
 	}
-	
 	safe_stop(app.bg_music);
 	string total_prize_str = prizes[questions.length() - 1];
 	int base_prize = parse_int(total_prize_str.replace(",", ""));
@@ -747,14 +680,11 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 		app.bg_music.volume = 0; 
 	}
 	app.bg_music.play_looped();
-	
 	string current_val = prizes[question_index];
 	string q_header = "Question number " + (question_index + 1) + " for " + current_val + " rupees.";
 	string q_text = q.question;
 	string opts_text = "Option A: " + q.options[0] + ". Option B: " + q.options[1] + ". Option C: " + q.options[2] + ". Option D: " + q.options[3] + ".";
-	
 	va.speak_wait(q_header + " " + q_text + " " + opts_text, true, true, q, -1);
-	
 	while(true) {
 		va.clear_commands();
 		va.add_command("option a"); va.add_command("alpha"); va.add_command("apple");
@@ -768,19 +698,15 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 		va.add_command("repeat");
 		va.add_command("status");
 		va.add_command("exit");
-		
 		if (state.lifeline_5050) va.add_command("use 50-50");
 		if (state.lifeline_phone) va.add_command("phone a friend");
 		if (state.lifeline_audience) va.add_command("ask the audience");
 		if (state.lifeline_double_dip) va.add_command("double dip");
 		if (state.lifeline_expert) va.add_command("ask an expert");
-		
 		va.speak_wait("Standing by for your answer or lifeline request.", false, true, q, -1);
-		
 		string ans_cmd = va.wait_for_command(true, q, -1);
 		if (ans_cmd == "") continue;
 		if (ans_cmd == "exit") return false;
-		
 		if (ans_cmd == "repeat") {
 			va.speak_wait(q_text + " " + opts_text, true, true, q, -1);
 			continue;
@@ -790,7 +716,6 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 			va.speak_wait("Current round is " + (question_index+1) + ". The active prize value is " + current_val + " rupees. You have " + left + " lifelines remaining.", true, true, q, -1);
 			continue;
 		}
-		
 		if (ans_cmd == "use 50-50" && state.lifeline_5050) {
 			va.speak_wait("Activating the 50-50 lifeline. Two incorrect options are being removed from consideration.", true, true, q, -1);
 			int[] removed = session.use_5050();
@@ -843,15 +768,12 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 			wait(5000);
 			continue;
 		}
-		
 		int selected_idx = -1;
 		if (ans_cmd == "option a" || ans_cmd == "a" || ans_cmd == "alpha" || ans_cmd == "apple") selected_idx = 0;
 		else if (ans_cmd == "option b" || ans_cmd == "b" || ans_cmd == "bravo" || ans_cmd == "boy" || ans_cmd == "baker") selected_idx = 1;
 		else if (ans_cmd == "option c" || ans_cmd == "c" || ans_cmd == "charlie" || ans_cmd == "cat") selected_idx = 2;
 		else if (ans_cmd == "option d" || ans_cmd == "d" || ans_cmd == "delta" || ans_cmd == "dog" || ans_cmd == "david") selected_idx = 3;
-		
 		if (selected_idx == -1) continue;
-		
 		while(true) {
 			va.clear_commands();
 			va.add_command("yes");
@@ -860,17 +782,14 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 			va.speak_wait("You have selected Option " + letter + ". Is that your final answer? Please confirm by saying 'Yes' or 'No'.", true, true, q, selected_idx);
 			string confirm = va.wait_for_command(true, q, selected_idx);
 			if (confirm == "") continue;
-			
 			if (confirm == "no") {
 				va.speak_wait("Selection cancelled. Please state your answer again.", true, true, q, selected_idx);
 				break; 
 			} else if (confirm == "exit") {
 				return false;
 			}
-			
 			safe_stop(app.bg_music);
 			play_sfx("Kbc Option Lock Tune.mp3", true);
-			
 			if (selected_idx == q.correct_index) {
 				return true;
 			} else {
@@ -912,7 +831,6 @@ void va_show_audience_poll(Question@ q, QuizSession& session) {
 			total_votes -= v;
 		}
 	}
-	
 	string results = "The audience has voted. The results are as follows: ";
 	for(uint i=0; i<votes.length(); i++) {
 		string letter = (i==0?"A":(i==1?"B":(i==2?"C":"D")));
