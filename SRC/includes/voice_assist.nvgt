@@ -1,7 +1,18 @@
-class VoiceAssist {
-#if !android
-	private voice_recognizer recognizer;
+#if android
+class voice_recognizer {
+	bool setup() { return false; }
+	bool add_command(const string &in cmd) { return false; }
+	void clear_commands() {}
+	void start() {}
+	void stop() {}
+	string get_command() { return ""; }
+	bool get_active() { return false; }
+	int get_commands_pending() { return 0; }
+}
 #endif
+
+class VoiceAssist {
+	private voice_recognizer recognizer;
 	private tone_synth synth;
 	private sound@ snd_wake;
 	private sound@ snd_success;
@@ -24,22 +35,18 @@ class VoiceAssist {
 	}
 	bool setup() {
 		if (available) return true;
-#if !android
 		if (recognizer.setup()) {
 			available = true;
 			recognizer.stop();
 			recognizer.clear_commands();
 			return true;
 		}
-#endif
 		return false;
 	}
 	void clear_commands() {
 		if (available) {
-#if !android
 			recognizer.stop();
 			recognizer.clear_commands();
-#endif
 			temporary_commands.resize(0);
 			last_menu_sync = "";
 			listening = false;
@@ -48,28 +55,22 @@ class VoiceAssist {
 	void add_command(const string&in cmd) {
 		if (available) {
 			string c = cmd.lower().trim_whitespace();
-#if !android
 			if (recognizer.add_command(c)) {
 				temporary_commands.insert_last(c);
 			}
-#endif
 		}
 	}
 	void start() {
-#if !android
 		if (available && !recognizer.get_active()) {
 			recognizer.start();
 			listening = true;
 		}
-#endif
 	}
 	void stop() {
-#if !android
 		if (available && recognizer.get_active()) {
 			recognizer.stop();
 			listening = false;
 		}
-#endif
 	}
 	int levenshtein_distance(string s1, string s2) {
 		int len1 = s1.length();
@@ -205,6 +206,13 @@ class VoiceAssist {
 		}
 		wait(100); 
 	}
+}
+
+string get_option_letter(int index) {
+	if (index == 0) return "A";
+	if (index == 1) return "B";
+	if (index == 2) return "C";
+	return "D";
 }
 
 VoiceAssist va;
@@ -461,7 +469,7 @@ void va_create_pack() {
 			if (correct_cmd == "b") temp_idx = 1;
 			else if (correct_cmd == "c") temp_idx = 2;
 			else if (correct_cmd == "d") temp_idx = 3;
-			string letter = (temp_idx == 0 ? "A" : (temp_idx == 1 ? "B" : (temp_idx == 2 ? "C" : "D")));
+			string letter = get_option_letter(temp_idx);
 			string opt_text = (temp_idx == 0 ? o1 : (temp_idx == 1 ? o2 : (temp_idx == 2 ? o3 : o4)));
 			va.speak_wait("You have selected Option " + letter + ": '" + opt_text + "' as the correct answer. Is this correct? Please say 'Yes' or 'No'.", true);
 			va.clear_commands();
@@ -723,7 +731,7 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 			for(uint i=0; i<4; i++) {
 				bool is_removed = false;
 				for(uint j=0; j<removed.length(); j++) if(removed[j] == int(i)) is_removed = true;
-				if(!is_removed) remaining += "Option " + (i==0?"A":(i==1?"B":(i==2?"C":"D"))) + ": " + q.options[i] + ". ";
+				if(!is_removed) remaining += "Option " + get_option_letter(i) + ": " + q.options[i] + ". ";
 			}
 			va.speak_wait(remaining + " Resuming the round in 5 seconds.", false, true, q, -1); 
 			wait(5000);
@@ -778,7 +786,7 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 			va.clear_commands();
 			va.add_command("yes");
 			va.add_command("no");
-			string letter = (selected_idx == 0 ? "A" : (selected_idx == 1 ? "B" : (selected_idx == 2 ? "C" : "D")));
+			string letter = get_option_letter(selected_idx);
 			va.speak_wait("You have selected Option " + letter + ". Is that your final answer? Please confirm by saying 'Yes' or 'No'.", true, true, q, selected_idx);
 			string confirm = va.wait_for_command(true, q, selected_idx);
 			if (confirm == "") continue;
@@ -800,7 +808,7 @@ bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 					break; 
 				}
 				play_sfx("Kbc Galat Jawab.mp3", true);
-				string correct_letter = (q.correct_index == 0 ? "A" : (q.correct_index == 1 ? "B" : (q.correct_index == 2 ? "C" : "D")));
+				string correct_letter = get_option_letter(q.correct_index);
 				va.speak_wait("I'm sorry, but that is the incorrect answer. The correct response was Option " + correct_letter + ": " + q.options[q.correct_index] + ". Your trivia session has concluded.", true);
 				va.speak_wait("Please stand by while we return you to the main menu.", false); 
 				wait(3000); 
@@ -833,7 +841,7 @@ void va_show_audience_poll(Question@ q, QuizSession& session) {
 	}
 	string results = "The audience has voted. The results are as follows: ";
 	for(uint i=0; i<votes.length(); i++) {
-		string letter = (i==0?"A":(i==1?"B":(i==2?"C":"D")));
+		string letter = get_option_letter(i);
 		results += "Option " + letter + ": " + votes[i] + " percent. ";
 	}
 	va.speak_wait(results, false, true, q, -1); 
