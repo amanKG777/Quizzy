@@ -1,6 +1,7 @@
 #pragma asset "sounds.dat"
 #pragma asset "LOGO.png"
 #pragma asset "fonts"
+#pragma plugin "voice_command"
 #include "menu.nvgt"
 #include "form.nvgt"
 #include "updater.nvgt"
@@ -8,6 +9,7 @@
 #include "includes/*.nvgt"
 #include "touch.nvgt"
 #include "settings.nvgt"
+#include "includes/voice_assist.nvgt"
 
 const string GAME_VERSION = "1.2.1";
 const string GITHUB_REPO_OWNER = "amanKG777";
@@ -197,6 +199,7 @@ int select_category() {
 	m.add_item("Music", "12");
 	m.add_item("Television", "14");
 	m.add_item("Video Games", "15");
+	m.add_item("Board Games", "16");
 	m.add_item("Science & Nature", "17");
 	m.add_item("Computers", "18");
 	m.add_item("Mathematics", "19");
@@ -467,7 +470,8 @@ void main_menu() {
 	m.add_item("Settings", "settings");
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
-	m.intro_text = "Welcome to quizzy! Select an option.";
+	m.intro_text = "Welcome to quizzy! Select an option. Press F1 for Voice Assist Mode.";
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	while (true) {
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(0);
@@ -532,6 +536,7 @@ void main_menu_reset(menu@ m) {
 	m.add_item("Settings", "settings");
 	m.add_item("Credits", "credits");
 	m.add_item("Exit", "exit");
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
 }
 
 string select_custom_pack() {
