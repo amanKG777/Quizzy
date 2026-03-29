@@ -166,69 +166,81 @@ void load_menu_music() {
 }
 
 string select_language() {
-	menu m;
-	createDefaultMenu(m);
-	m.add_item("English", "en");
-	m.add_item("Hindi", "hi");
-	m.add_item("French", "fr");
-	m.add_item("Back", "back");
-	m.intro_text = "Select your preferred language.";
-	string lang = "en";
 	while (true) {
-		wait(0);
-		app.touch.monitor();
-		if (!m.monitor()) {
-			lang = m.selected_item_id;
-			if (lang == "" || lang == "back") return "back";
-			break;
+		app.current_state = STATE_LANGUAGE_SELECTION;
+		menu m;
+		createDefaultMenu(m);
+		m.add_item("English", "en");
+		m.add_item("Hindi", "hi");
+		m.add_item("French", "fr");
+		m.add_item("Back", "back");
+		m.intro_text = "Select your preferred language. Press F1 for Voice Assist.";
+		app.input.register_local(KEY_F1, run_voice_assist_mode);
+		string lang = "en";
+		while (true) {
+			wait(0);
+			app.touch.monitor();
+			app.input.monitor();
+			if (!m.monitor()) {
+				lang = m.selected_item_id;
+				if (lang == "" || lang == "back") return "back";
+				return lang;
+			}
+			gm.prepare_frame();
+			gm.draw_menu(m);
+			gm.present_frame();
 		}
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 	}
-	return lang;
+	return "back";
 }
 
 int select_category() {
-	menu m;
-	createDefaultMenu(m);
-	m.add_item("Random Categories", "0");
-	m.add_item("General Knowledge", "9");
-	m.add_item("Books", "10");
-	m.add_item("Film", "11");
-	m.add_item("Music", "12");
-	m.add_item("Television", "14");
-	m.add_item("Video Games", "15");
-	m.add_item("Board Games", "16");
-	m.add_item("Science & Nature", "17");
-	m.add_item("Computers", "18");
-	m.add_item("Mathematics", "19");
-	m.add_item("Mythology", "20");
-	m.add_item("Sports", "21");
-	m.add_item("Geography", "22");
-	m.add_item("History", "23");
-	m.add_item("Politics", "24");
-	m.add_item("Art", "25");
-	m.add_item("Animals", "27");
-	m.add_item("Back", "back");
-	m.intro_text = "Select a category.";
-	int cat_id = 0;
 	while (true) {
-		wait(0);
-		app.touch.monitor();
-		if (!m.monitor()) {
-			if (m.selected_item_id == "back" || m.selected_item_id == "") return -1;
-			cat_id = parse_int(m.selected_item_id);
-			break;
+		app.current_state = STATE_CATEGORY_SELECTION;
+		menu m;
+		createDefaultMenu(m);
+		m.add_item("Random Categories", "0");
+		m.add_item("General Knowledge", "9");
+		m.add_item("Books", "10");
+		m.add_item("Film", "11");
+		m.add_item("Music", "12");
+		m.add_item("Television", "14");
+		m.add_item("Video Games", "15");
+		m.add_item("Board Games", "16");
+		m.add_item("Science & Nature", "17");
+		m.add_item("Computers", "18");
+		m.add_item("Mathematics", "19");
+		m.add_item("Mythology", "20");
+		m.add_item("Sports", "21");
+		m.add_item("Geography", "22");
+		m.add_item("History", "23");
+		m.add_item("Politics", "24");
+		m.add_item("Art", "25");
+		m.add_item("Animals", "27");
+		m.add_item("Back", "back");
+		m.intro_text = "Select a category. Press F1 for Voice Assist.";
+		app.input.register_local(KEY_F1, run_voice_assist_mode);
+		int cat_id = 0;
+		while (true) {
+			wait(0);
+			app.touch.monitor();
+			app.input.monitor();
+			if (!m.monitor()) {
+				if (m.selected_item_id == "back" || m.selected_item_id == "") return -1;
+				cat_id = parse_int(m.selected_item_id);
+				return cat_id;
+			}
+			gm.prepare_frame();
+			gm.draw_menu(m);
+			gm.present_frame();
 		}
-		gm.prepare_frame();
-		gm.draw_menu(m);
-		gm.present_frame();
 	}
-	return cat_id;
+	return -1;
 }
 
 void settings_menu() {
+	app.current_state = STATE_SETTINGS;
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	string startup_setting = app.config.read_string("play_startup_sound", "true");
 	string wrap_setting = app.config.read_string("menu_wrap", "false");
 	string visuals_setting = app.config.read_string("visuals_enabled", "true");
@@ -333,8 +345,11 @@ void settings_menu() {
 }
 
 void manage_custom_packs_menu() {
+	app.current_state = STATE_CUSTOM_PACKS;
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	menu m;
 	while (true) {
+		app.current_state = STATE_CUSTOM_PACKS;
 		m.reset();
 		createDefaultMenu(m);
 		m.intro_text = "Manage Custom Packs. Select an option.";
@@ -418,6 +433,8 @@ void custom_pack_actions_menu(string filename) {
 }
 
 void show_credits() {
+	app.current_state = STATE_CREDITS;
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	string credits_text = "QUIZZY CREDITS\r\n\r\n" +
 	"Project Lead & Programming\r\n" +
 	"--------------------------\r\n" +
@@ -473,6 +490,7 @@ void main_menu() {
 	m.intro_text = "Welcome to quizzy! Select an option. Press F1 for Voice Assist Mode.";
 	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	while (true) {
+		app.current_state = STATE_MAIN_MENU;
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(0);
 		app.touch.monitor();

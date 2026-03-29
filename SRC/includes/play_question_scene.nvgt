@@ -15,6 +15,8 @@ class PlayQuestionScene {
 	int q_field = -1;
 	int last_focus = -1;
 	void init(Question@ q, int question_index) {
+		app.current_state = STATE_IN_GAME;
+		@app.last_question = @q;
 		exit_game_flag = false;
 		@this.q = q;
 		this.question_index = question_index;
@@ -98,6 +100,7 @@ class PlayQuestionScene {
 		app.input.register_local(KEY_L, KeyEventHandler(this.on_key_L));
 		app.input.register_local(KEY_S, KeyEventHandler(this.on_key_S));
 		app.input.register_local(KEY_F5, KeyEventHandler(this.on_key_F5));
+		app.input.register_local(KEY_F1, run_voice_assist_mode);
 	}
 	void on_key_A() {
 		if (option_buttons.length() > 0) {

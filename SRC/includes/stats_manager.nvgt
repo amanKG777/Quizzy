@@ -57,6 +57,8 @@ class stats_manager {
 		save();
 	}
 	void show_stats_menu() {
+		app.current_state = STATE_STATS;
+		app.input.register_local(KEY_F1, run_voice_assist_mode);
 		audio_form f;
 		f.create_window("Statistics", false);
 		string stats_text = "GENERAL STATISTICS\n" +
