@@ -23,19 +23,16 @@ class VoiceAssist {
 	private bool listening = false;
 	bool manual_next_enabled = false;
 	bool active = false;
-
 	VoiceAssist() {
 		@snd_wake = generate_tone(880, 100); 
 		@snd_fail = generate_tone(440, 100); 
 		@snd_success = generate_tone(1200, 50);
 	}
-
 	private sound@ generate_tone(double freq, int ms) {
 		tone_synth s;
 		s.freq_ms(freq, ms);
 		return s.write_wave_sound();
 	}
-
 	bool setup() {
 		if (available) return true;
 		if (recognizer.setup()) {
@@ -46,7 +43,6 @@ class VoiceAssist {
 		}
 		return false;
 	}
-
 	void clear_commands() {
 		if (available) {
 			recognizer.stop();
@@ -56,7 +52,6 @@ class VoiceAssist {
 			listening = false;
 		}
 	}
-
 	void add_command(const string&in cmd) {
 		if (available) {
 			string c = cmd.lower().trim_whitespace();
@@ -65,21 +60,18 @@ class VoiceAssist {
 			}
 		}
 	}
-
 	void start() {
 		if (available && !recognizer.get_active()) {
 			recognizer.start();
 			listening = true;
 		}
 	}
-
 	void stop() {
 		if (available && recognizer.get_active()) {
 			recognizer.stop();
 			listening = false;
 		}
 	}
-
 	int levenshtein_distance(string s1, string s2) {
 		int len1 = s1.length();
 		int len2 = s2.length();
@@ -102,21 +94,17 @@ class VoiceAssist {
 		}
 		return col[len2];
 	}
-
 	string wait_for_command(bool draw_question = false, Question@ q = null, int sel = -1, int custom_timeout = 10000, string interrupt_text = "") {
 		if (!available) return "";
-		
 		if (recognizer.get_active()) recognizer.stop();
 		wait(50);
 		recognizer.start();
 		wait(50);
-		
 		if (interrupt_text != "") {
 			speak(interrupt_text, true);
 		} else if (@snd_wake != null) {
 			snd_wake.play();
 		}
-		
 		while(screen_reader_is_speaking() || (app.voice.speaking)) {
 			if (recognizer.get_commands_pending() > 0) {
 				screen_reader_silence();
@@ -126,9 +114,7 @@ class VoiceAssist {
 			update_ui(draw_question, q, sel);
 			wait(5);
 		}
-		
 		if (!recognizer.get_active()) recognizer.start();
-		
 		uint64 start_time = ticks();
 		uint64 timeout = uint64(custom_timeout); 
 		while(ticks() - start_time < timeout) {
@@ -141,9 +127,7 @@ class VoiceAssist {
 			if (recognizer.get_commands_pending() > 0) {
 				string heard = recognizer.get_command().lower().trim_whitespace();
 				if (heard == "") continue;
-				
 				recognizer.stop();
-				
 				if (heard == "report progress" || heard == "status") {
 					if (g_fetch_action != "") {
 						speak_wait("The system is currently " + g_fetch_action + ". Current progress is at " + g_fetch_progress + " percent.", false, draw_question, q, sel);
@@ -205,7 +189,6 @@ class VoiceAssist {
 		recognizer.stop(); 
 		return "";
 	}
-
 	void run() {
 		if (app.current_state == STATE_IN_GAME) {
 			va_read_current_question();
@@ -258,7 +241,6 @@ class VoiceAssist {
 			active = false;
 			return;
 		}
-		
 		string prompt = "Welcome to Voice Assist. You are at the Main Menu. Options: Start Game, Download Category for Offline, Manage Custom Packs, Statistics, Settings, Credits, and Exit. State your command.";
 		bool first_run = true;
 		while(true) {
@@ -317,7 +299,6 @@ class VoiceAssist {
 			}
 		}
 	}
-
 	void va_download_flow() {
 		speak_wait("Download Category. Please select language.", true);
 		string lang = va_language_selection_only();
@@ -329,7 +310,6 @@ class VoiceAssist {
 		download_category(cat_id, lang);
 		speak_wait("Download complete.", true);
 	}
-
 	string va_language_selection_only() {
 		string prompt = "Select Language: English, Hindi, French, or Back.";
 		while(true) {
@@ -347,7 +327,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	int va_category_selection_only() {
 		string prompt = "Select Category or say Back.";
 		while(true) {
@@ -394,7 +373,6 @@ class VoiceAssist {
 		}
 		return -1;
 	}
-
 	string va_language_selection() {
 		string prompt = "Select Language: English, Hindi, French, or Back.";
 		bool first_run = true;
@@ -418,7 +396,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	string va_category_selection(string lang) {
 		string prompt = "Select Category or say Back.";
 		bool first_run = true;
@@ -468,7 +445,6 @@ class VoiceAssist {
 			else if (cat_cmd == "animals") cat_id = 27;
 			else if (cat_cmd == "back") return "back";
 			if (cat_id == -1) continue;
-			
 			speak_wait("Initializing trivia session. Round 1 starting.", true);
 			init_questions(lang, cat_id);
 			if (questions.length() == 0) {
@@ -485,7 +461,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	void va_game_loop() {
 		QuizSession session;
 		for (uint i = 0; i < questions.length(); i++) {
@@ -517,7 +492,6 @@ class VoiceAssist {
 		speak_wait("Incredible performance! You have successfully completed the trivia challenge and won the grand prize of " + total_prize_str + " rupees! Congratulations on your outstanding achievement.", true);
 		wait(2000); 
 	}
-
 	bool va_play_question(QuizSession& session, Question@ q, int question_index) {
 		session.start_question(q, question_index);
 		if (question_index < 10) {
@@ -532,7 +506,6 @@ class VoiceAssist {
 		string q_header = "Question number " + (question_index + 1) + " for " + current_val + " rupees.";
 		string q_text = q.question;
 		string opts_text = "Option A: " + q.options[0] + ". Option B: " + q.options[1] + ". Option C: " + q.options[2] + ". Option D: " + q.options[3] + ".";
-		
 		string prompt = q_header + " " + q_text + " " + opts_text;
 		bool first_run = true;
 		while(true) {
@@ -553,7 +526,6 @@ class VoiceAssist {
 			if (state.lifeline_audience) add_command("ask the audience");
 			if (state.lifeline_double_dip) add_command("double dip");
 			if (state.lifeline_expert) add_command("ask an expert");
-			
 			string ans_cmd = wait_for_command(true, q, -1, 30000, first_run ? (prompt + " Standing by for your answer or lifeline request.") : "");
 			first_run = false;
 			if (ans_cmd == "") continue;
@@ -660,12 +632,10 @@ class VoiceAssist {
 		}
 		return false;
 	}
-
 	void va_read_correct_answer(int idx, string text) {
 		string letter = get_option_letter(idx);
 		speak_wait("I'm sorry, but that is the incorrect answer. The correct response was Option " + letter + ": " + text + ". Your trivia session has concluded.", true);
 	}
-
 	void va_show_audience_poll(Question@ q, QuizSession& session) {
 		int[] votes(q.options.length());
 		int total_votes = 100;
@@ -693,13 +663,11 @@ class VoiceAssist {
 		}
 		speak_wait(results, false, true, q, -1); 
 	}
-
 	void va_read_current_question() {
 		if (@app.last_question == null) return;
 		string q_header = "Question number " + (state.current_question_index + 1) + " for " + prizes[state.current_question_index] + " rupees.";
 		string q_text = app.last_question.question;
 		string opts_text = "Option A: " + app.last_question.options[0] + ". Option B: " + app.last_question.options[1] + ". Option C: " + app.last_question.options[2] + ". Option D: " + app.last_question.options[3] + ".";
-		
 		clear_commands();
 		add_command("a"); add_command("b"); add_command("c"); add_command("d");
 		add_command("option a"); add_command("option b"); add_command("option c"); add_command("option d");
@@ -711,21 +679,17 @@ class VoiceAssist {
 		if (state.lifeline_audience) add_command("ask the audience");
 		if (state.lifeline_double_dip) add_command("double dip");
 		if (state.lifeline_expert) add_command("ask an expert");
-
 		string cmd = wait_for_command(true, app.last_question, -1, 20000, q_header + " " + q_text + " " + opts_text);
 		if (cmd == "" || cmd == "exit") return;
-		
 		if (cmd == "repeat") {
 			va_read_current_question();
 			return;
 		}
-		
 		int selected_idx = -1;
 		if (cmd == "option a" || cmd == "a" || cmd == "alpha") selected_idx = 0;
 		else if (cmd == "option b" || cmd == "b" || cmd == "bravo") selected_idx = 1;
 		else if (cmd == "option c" || cmd == "c" || cmd == "charlie") selected_idx = 2;
 		else if (cmd == "option d" || cmd == "d" || cmd == "delta") selected_idx = 3;
-		
 		if (selected_idx != -1) {
 			string letter = get_option_letter(selected_idx);
 			speak_wait("You have selected Option " + letter + ". Please use your keyboard to confirm this as your final answer.", true);
@@ -733,7 +697,6 @@ class VoiceAssist {
 			speak_wait("You requested a lifeline. Please use the corresponding shortcut key on your keyboard.", true);
 		}
 	}
-
 	string va_settings_menu() {
 		string prompt = "You are currently at the Settings screen. The options available here are to Enable or Disable: Menu Music, Startup Intro, Visuals, High Contrast, Heartbeat sound, and Manual Progression. Say 'Back' to return to the main menu.";
 		bool first_run = true;
@@ -799,7 +762,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	string va_custom_packs_menu() {
 		bool first_run = true;
 		while(true) {
@@ -841,7 +803,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	void va_create_pack() {
 		speak_wait("You have started the Voice-Driven Pack Creator. Please follow the auditory prompts carefully. You can say 'Cancel' at any time to discard the current pack.", true);
 		string pack_name = request_dictation("Please state the desired name for your new question pack.");
@@ -916,7 +877,6 @@ class VoiceAssist {
 			speak_wait("No questions were provided. The creation process has been discarded.", true);
 		}
 	}
-
 	string request_dictation(string prompt, bool draw_q = false, Question@ q = null, int sel = -1) {
 		while(true) {
 			clear_commands();
@@ -935,7 +895,6 @@ class VoiceAssist {
 		}
 		return "";
 	}
-
 	string va_custom_pack_actions(string filename) {
 		string short_name = filename.substr(filename.find_last_of("\\/")+1).replace(".json", "");
 		string prompt = "You are currently managing the '" + short_name + "' pack. Your available actions are: 'Play', 'Delete', or 'Back'.";
@@ -976,7 +935,6 @@ class VoiceAssist {
 		}
 		return "back";
 	}
-
 	void va_stats() {
 		speak_wait("Generating your Statistics Report.", true);
 		speak_wait("Total trivia sessions completed across all modes: " + stats.total_games_played + ".", false); 
@@ -984,11 +942,9 @@ class VoiceAssist {
 		speak_wait("Your cumulative career earnings to date total: " + stats.format_currency(stats.total_earnings) + " rupees.", false); 
 		speak_wait("Report complete. Say 'Back' or state another main menu destination.", false); 
 	}
-
 	void va_credits() {
 		speak_wait("Quizzy was developed by the team at Boostof Studios. Project leads and primary software engineers: Aman Kumar Gupta and Aryan. Art direction and visual consultancy provided by Shiva Choudhary. The application is built upon the Non-Visual Gaming Toolkit framework. We sincerely thank you for playing and for your support of accessible gaming!", true);
 	}
-
 	void update_ui(bool draw_question, Question@ q, int sel) {
 		app.touch.monitor();
 		app.input.monitor();
@@ -1001,7 +957,6 @@ class VoiceAssist {
 		}
 		gm.present_frame();
 	}
-
 	void speak_wait(const string&in text, bool interrupt = true, bool draw_q = false, Question@ q = null, int sel = -1) {
 		speak(text, interrupt);
 		wait(100); 
