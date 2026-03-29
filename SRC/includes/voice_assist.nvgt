@@ -1,4 +1,4 @@
-#if android
+#if_not windows
 class voice_recognizer {
 	bool setup() { return false; }
 	bool add_command(const string &in cmd) { return false; }

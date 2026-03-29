@@ -1,7 +1,9 @@
-#pragma asset "sounds.dat"
+#pragma asset "$sounds.dat"
 #pragma asset "LOGO.png"
 #pragma asset "fonts"
+#if windows
 #pragma plugin "voice_command"
+#endif
 #include "menu.nvgt"
 #include "form.nvgt"
 #include "updater.nvgt"
