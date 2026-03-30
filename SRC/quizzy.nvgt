@@ -493,6 +493,7 @@ void main_menu() {
 	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	while (true) {
 		app.current_state = STATE_MAIN_MENU;
+		app.pending_main_menu_return = false;
 		m.wrap = (app.config.read_string("menu_wrap", "false") == "true");
 		wait(0);
 		app.touch.monitor();
@@ -502,8 +503,9 @@ void main_menu() {
 			if (choice == "start") {
 				while (true) {
 					string lang = select_language();
-					if (lang == "back") break;
+					if (lang == "back" || app.pending_main_menu_return) break;
 					int cat_id = select_category();
+					if (app.pending_main_menu_return) break;
 					if (cat_id == -1) continue; 
 					init_questions(lang, cat_id);
 					if (questions.length() == 0) {
@@ -515,14 +517,15 @@ void main_menu() {
 						game_loop();
 						load_menu_music();
 					}
+					if (app.pending_main_menu_return) break;
 					break; 
 				}
 				main_menu_reset(m);
 			} else if (choice == "download") {
 				string lang = select_language();
-				if (lang != "back") {
+				if (lang != "back" && !app.pending_main_menu_return) {
 					int cat_id = select_category();
-					if (cat_id != -1) {
+					if (cat_id != -1 && !app.pending_main_menu_return) {
 						download_category(cat_id, lang);
 					}
 				}

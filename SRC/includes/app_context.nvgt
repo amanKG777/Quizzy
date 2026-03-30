@@ -15,6 +15,8 @@ class AppContext {
 	InputManager input;
 	AppGameState current_state = STATE_MAIN_MENU;
 	Question@ last_question = null;
+	PlayQuestionScene@ active_scene = null;
+	bool pending_main_menu_return = false;
 	progress_window@ pw = null;
 	touch_gesture_manager touch;
 	touch_keyboard_interface@ touch_keys;

@@ -14,12 +14,12 @@ class PlayQuestionScene {
 	int quit_btn = -1;
 	int q_field = -1;
 	int last_focus = -1;
+	bool exit_game_flag = false;
 	void init(Question@ q, int question_index) {
 		app.current_state = STATE_IN_GAME;
 		@app.last_question = @q;
+		@app.active_scene = @this;
 		exit_game_flag = false;
-		@this.q = q;
-		this.question_index = question_index;
 		session.start_question(q, question_index);
 		safe_stop(app.bg_music);
 		if (question_index < 10) {
