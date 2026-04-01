@@ -1,7 +1,22 @@
 #include "input_manager.nvgt"
 
+enum AppGameState {
+	STATE_MAIN_MENU,
+	STATE_LANGUAGE_SELECTION,
+	STATE_CATEGORY_SELECTION,
+	STATE_IN_GAME,
+	STATE_SETTINGS,
+	STATE_STATS,
+	STATE_CREDITS,
+	STATE_CUSTOM_PACKS
+}
+
 class AppContext {
 	InputManager input;
+	AppGameState current_state = STATE_MAIN_MENU;
+	Question@ last_question = null;
+	PlayQuestionScene@ active_scene = null;
+	bool pending_main_menu_return = false;
 	progress_window@ pw = null;
 	touch_gesture_manager touch;
 	touch_keyboard_interface@ touch_keys;
@@ -14,6 +29,7 @@ class AppContext {
 	sound_pool pool;
 	tts_voice voice;
 	settings config;
+	string current_dialog_text = "";
 }
 
 AppContext app;

@@ -1,0 +1,179 @@
+#if_not windows
+class voice_recognizer {
+	bool setup() { return false; }
+	bool add_command(const string &in cmd) { return false; }
+	void clear_commands() {}
+	void start() {}
+	void stop() {}
+	string get_command() { return ""; }
+	bool get_active() { return false; }
+	int get_commands_pending() { return 0; }
+}
+#endif
+
+class VoiceAssist {
+	private voice_recognizer recognizer;
+	private sound@ snd_success;
+	private sound@ snd_fail;
+	bool available = false;
+	private string[] temporary_commands;
+	bool listening = false;
+	VoiceAssist() {
+		@snd_fail = generate_tone(440, 100); 
+		@snd_success = generate_tone(1200, 50);
+	}
+	private sound@ generate_tone(double freq, int ms) {
+		tone_synth s;
+		s.freq_ms(freq, ms);
+		return s.write_wave_sound();
+	}
+	bool setup() {
+		if (available) return true;
+		if (recognizer.setup()) {
+			available = true;
+			recognizer.stop();
+			recognizer.clear_commands();
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				recognizer.add_command(temporary_commands[i]);
+			}
+			return true;
+		}
+		return false;
+	}
+	void clear_commands() {
+		temporary_commands.resize(0);
+		if (available) {
+			recognizer.stop();
+			recognizer.clear_commands();
+		}
+	}
+	void add_command(const string&in cmd) {
+		string c = cmd.lower().trim_whitespace();
+		temporary_commands.insert_last(c);
+		if (available) {
+			recognizer.add_command(c);
+		}
+	}
+	void start() {
+		if (available && listening && !recognizer.get_active()) {
+			recognizer.start();
+			speak(get_voice_hint(), false);
+		}
+	}
+	void force_stop() {
+		if (available && recognizer.get_active()) {
+			recognizer.stop();
+		}
+	}
+	int levenshtein_distance(string s1, string s2) {
+		int len1 = s1.length();
+		int len2 = s2.length();
+		if (len1 == 0) return len2;
+		if (len2 == 0) return len1;
+		array<int> col(len2 + 1);
+		for (int y = 0; y <= len2; y++) col[y] = y;
+		for (int x = 1; x <= len1; x++) {
+			col[0] = x;
+			int last = x - 1;
+			for (int y = 1; y <= len2; y++) {
+				int temp = col[y];
+				int cost = (s1[x - 1] == s2[y - 1]) ? 0 : 1;
+				int v1 = col[y - 1] + 1;
+				int v2 = last + 1;
+				int v3 = last + cost;
+				col[y] = (v1 < v2) ? (v1 < v3 ? v1 : v3) : (v2 < v3 ? v2 : v3);
+				last = temp;
+			}
+		}
+		return col[len2];
+	}
+	string get_command_non_blocking() {
+		if (!available || !listening) return "";
+		if (key_pressed(KEY_ESCAPE)) {
+			listening = false;
+			force_stop();
+			speak("Voice Assist deactivated.", true);
+			return "";
+		}
+		if (recognizer.get_commands_pending() > 0) {
+			string heard = recognizer.get_command().lower().trim_whitespace();
+			if (heard == "") return "";
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				if (heard == temporary_commands[i] || temporary_commands[i] == "*") {
+					if (@snd_success != null) snd_success.play();
+					return temporary_commands[i];
+				}
+			}
+			string best_match = "";
+			int min_dist = 999;
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				if (temporary_commands[i] == "*") continue;
+				int d = levenshtein_distance(heard, temporary_commands[i]);
+				if (d < min_dist) {
+					min_dist = d;
+					best_match = temporary_commands[i];
+				}
+			}
+			int threshold = (best_match.length() > 8) ? 3 : ((best_match.length() >= 5) ? 2 : 1);
+			if (best_match != "" && min_dist <= threshold) {
+				if (@snd_success != null) snd_success.play();
+				return best_match;
+			}
+			if (@snd_fail != null) snd_fail.play();
+		}
+		return "";
+	}
+}
+
+string get_option_letter(int index) {
+	if (index == 0) return "A";
+	if (index == 1) return "B";
+	if (index == 2) return "C";
+	return "D";
+}
+
+string get_voice_hint() {
+	if (app.current_dialog_text != "") {
+		return app.current_dialog_text + " Say Yes or No.";
+	}
+	if (app.current_state == STATE_MAIN_MENU) return "Main menu. Say start game, download category, manage custom packs, statistics, settings, credits, or exit.";
+	if (app.current_state == STATE_LANGUAGE_SELECTION) return "Select language. Say English, Hindi, French, or back.";
+	if (app.current_state == STATE_CATEGORY_SELECTION) return "Select category. Say random categories, general knowledge, books, film, music, television, video games, board games, science and nature, computers, mathematics, mythology, sports, geography, history, politics, art, animals, or back.";
+	if (app.current_state == STATE_SETTINGS) return "Settings. You can say back.";
+	if (app.current_state == STATE_CREDITS) return "Credits. Say back.";
+	if (app.current_state == STATE_CUSTOM_PACKS) return "Custom packs. Say create, open pack from external location, or say the pack name, or back.";
+	if (app.current_state == STATE_IN_GAME && @app.last_question != null) {
+		string t = app.last_question.question + ". ";
+		for (uint i = 0; i < app.last_question.options.length(); i++) {
+			t += "Option " + get_option_letter(i) + ": " + app.last_question.options[i] + ". ";
+		}
+		string lifelines = "";
+		if (state.lifeline_5050) lifelines += " 50 50,";
+		if (state.lifeline_phone) lifelines += " phone a friend,";
+		if (state.lifeline_audience) lifelines += " ask the audience,";
+		if (state.lifeline_double_dip) lifelines += " double dip,";
+		if (state.lifeline_expert) lifelines += " ask an expert,";
+		if (lifelines != "") t += " Available lifelines:" + lifelines;
+		return t + " Or exit.";
+	}
+	return "Voice assist active. Say a valid command for the current screen.";
+}
+VoiceAssist va;
+
+void run_voice_assist_mode() {
+	if (!va.available) {
+		if (!va.setup()) {
+			alert("Voice Assist Error", "Initialization of the voice recognition engine has failed. Please ensure your recording device is functional.");
+			return;
+		}
+	}
+	if (va.listening) {
+		va.listening = false;
+		va.force_stop();
+		speak("Voice Assist deactivated.", true);
+	} else {
+		va.listening = true;
+		va.start();
+		speak("Voice Assist activated. " + get_voice_hint(), true);
+	}
+}

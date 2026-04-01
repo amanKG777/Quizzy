@@ -43,7 +43,11 @@ class TranslationCache {
 
 TranslationCache t_cache;
 
+int g_fetch_progress = 0;
+string g_fetch_action = "";
+
 string fetch_json_with_progress(string url, string action_text, int base_progress = 0, int weight = 0) {
+	g_fetch_action = action_text;
 	http h;
 	h.get(url);
 	bool created_pw = false;
@@ -66,6 +70,7 @@ string fetch_json_with_progress(string url, string action_text, int base_progres
 		} else {
 			current_p = int(h.progress * 100);
 		}
+		g_fetch_progress = current_p;
 		if (@app.pw != null && !blitz_fetching) {
 			app.pw.update(current_p);
 			if (btn_cancel != -1 && app.pw.f.is_pressed(btn_cancel)) {

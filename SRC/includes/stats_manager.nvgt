@@ -57,8 +57,10 @@ class stats_manager {
 		save();
 	}
 	void show_stats_menu() {
+		app.current_state = STATE_STATS;
+		app.input.register_local(KEY_F1, run_voice_assist_mode);
 		audio_form f;
-		f.create_window("Statistics", false);
+		f.create_window("Statistics", false, true, va.listening);
 		string stats_text = "GENERAL STATISTICS\n" +
 			"Total Games Played: " + total_games_played + "\n" +
 			"Total Earnings: ₹" + format_currency(total_earnings) + "\n" +
@@ -72,20 +74,35 @@ class stats_manager {
 		f.create_input_box("Player Statistics", stats_text, "", 0, true, true);
 		int btn_reset = f.create_button("Reset Statistics");
 		int btn_back = f.create_button("Back", true, true);
-		f.focus(btn_back);
+		if (va.listening) f.focus_silently(btn_back);
+		else f.focus(btn_back);
+		va.clear_commands();
+		va.add_command("reset statistics");
+		va.add_command("reset");
+		va.add_command("back");
+		va.start();
 		while (true) {
 			wait(5);
-			app.touch.monitor();
+			string v_cmd = va.get_command_non_blocking();
+			if (v_cmd == "back") break;
+			if (!va.listening) {
+				app.touch.monitor();
+				f.monitor();
+			}
 			gm.prepare_frame();
 			gm.draw_form(f);
 			gm.present_frame();
-			f.monitor();
-			if (f.is_pressed(btn_reset)) {
+			if (v_cmd == "reset statistics" || v_cmd == "reset" || f.is_pressed(btn_reset)) {
 				if (ask_yes_no("Quizzy", "Are you sure you want to reset all statistics? This cannot be undone.") == 1) {
 					reset_all();
 					speak("Statistics reset.", false);
 					break;
 				}
+				va.clear_commands();
+				va.add_command("reset statistics");
+				va.add_command("reset");
+				va.add_command("back");
+				va.start();
 			}
 			if (f.is_pressed(btn_back)) break;
 		}
