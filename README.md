@@ -24,7 +24,7 @@ For a comprehensive user guide, including a full list of features, game modes, a
 ### Attributions
 * Questions: Sourced from the [Open Trivia Database (OpenTDB)](https://opentdb.com) and [The Trivia API (V2)](https://the-trivia-api.com).
 * Audio Assets: High-quality sound effects provided by J F Sounds.
-* Engine: Built using the [Non-Visual Gaming Toolkit (NVGT)](https://nvgt.gg).
+* Engine: Built using the [Non-Visual Gaming Toolkit (NVGT)](https://nvgt.dev).
 
 ## License
 
