@@ -29,6 +29,7 @@ class AppContext {
 	sound_pool pool;
 	tts_voice voice;
 	settings config;
+	string current_dialog_text = "";
 }
 
 AppContext app;

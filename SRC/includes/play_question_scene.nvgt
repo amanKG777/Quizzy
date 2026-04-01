@@ -14,12 +14,13 @@ class PlayQuestionScene {
 	int quit_btn = -1;
 	int q_field = -1;
 	int last_focus = -1;
-	bool exit_game_flag = false;
 	void init(Question@ q, int question_index) {
 		app.current_state = STATE_IN_GAME;
 		@app.last_question = @q;
 		@app.active_scene = @this;
 		exit_game_flag = false;
+		@this.q = q;
+		this.question_index = question_index;
 		session.start_question(q, question_index);
 		safe_stop(app.bg_music);
 		if (question_index < 10) {
@@ -66,7 +67,7 @@ class PlayQuestionScene {
 			lifeline_expert_label = "लाइफलाइन: आस्क एन एक्सपर्ट";
 			quit_label = "खेल छोड़ें";
 		}
-		f.create_window("Quizzy", false);
+		f.create_window("Quizzy", false, true, va.listening);
 		q_field = f.create_input_box(q_label, q.question, "", 0, true, true);
 		int progress_list = f.create_list(prize_label);
 		for (uint i = 0; i < prizes.length(); i++) {
@@ -90,7 +91,8 @@ class PlayQuestionScene {
 		if (state.lifeline_double_dip) btn_double = f.create_button(lifeline_double_label);
 		if (state.lifeline_expert) btn_expert = f.create_button(lifeline_expert_label);
 		quit_btn = f.create_button(quit_label, false, true);
-		f.focus(q_field);
+		if (va.listening) f.focus_silently(q_field);
+		else f.focus(q_field);
 		int master_vol = int(app.config.read_number("master_volume", 100));
 		set_sound_master_volume(master_vol == 0 ? -100.0 : 20.0 * log10(float(master_vol) / 100.0));
 		app.input.register_local(KEY_A, KeyEventHandler(this.on_key_A));
@@ -101,10 +103,24 @@ class PlayQuestionScene {
 		app.input.register_local(KEY_S, KeyEventHandler(this.on_key_S));
 		app.input.register_local(KEY_F5, KeyEventHandler(this.on_key_F5));
 		app.input.register_local(KEY_F1, run_voice_assist_mode);
+		va.clear_commands();
+		va.add_command("option a"); va.add_command("alpha"); va.add_command("apple"); va.add_command("a");
+		va.add_command("option b"); va.add_command("bravo"); va.add_command("boy"); va.add_command("b");
+		va.add_command("option c"); va.add_command("charlie"); va.add_command("cat"); va.add_command("c");
+		va.add_command("option d"); va.add_command("delta"); va.add_command("dog"); va.add_command("d");
+		va.add_command("status");
+		va.add_command("exit");
+		if (state.lifeline_5050) va.add_command("use 50 50");
+		if (state.lifeline_phone) va.add_command("phone a friend");
+		if (state.lifeline_audience) va.add_command("ask the audience");
+		if (state.lifeline_double_dip) va.add_command("double dip");
+		if (state.lifeline_expert) va.add_command("ask an expert");
+		va.start();
 	}
 	void on_key_A() {
 		if (option_buttons.length() > 0) {
-			f.focus(option_buttons[0]);
+			if (va.listening) f.focus_silently(option_buttons[0]);
+			else f.focus(option_buttons[0]);
 			if (handle_option_selection(session, 0, option_buttons, current_selection)) {
 				loop_result = 1;
 			} else if (exit_game_flag) {
@@ -114,7 +130,8 @@ class PlayQuestionScene {
 	}
 	void on_key_B() {
 		if (option_buttons.length() > 1) {
-			f.focus(option_buttons[1]);
+			if (va.listening) f.focus_silently(option_buttons[1]);
+			else f.focus(option_buttons[1]);
 			if (handle_option_selection(session, 1, option_buttons, current_selection)) {
 				loop_result = 1;
 			} else if (exit_game_flag) {
@@ -124,7 +141,8 @@ class PlayQuestionScene {
 	}
 	void on_key_C() {
 		if (option_buttons.length() > 2) {
-			f.focus(option_buttons[2]);
+			if (va.listening) f.focus_silently(option_buttons[2]);
+			else f.focus(option_buttons[2]);
 			if (handle_option_selection(session, 2, option_buttons, current_selection)) {
 				loop_result = 1;
 			} else if (exit_game_flag) {
@@ -134,7 +152,8 @@ class PlayQuestionScene {
 	}
 	void on_key_D() {
 		if (option_buttons.length() > 3) {
-			f.focus(option_buttons[3]);
+			if (va.listening) f.focus_silently(option_buttons[3]);
+			else f.focus(option_buttons[3]);
 			if (handle_option_selection(session, 3, option_buttons, current_selection)) {
 				loop_result = 1;
 			} else if (exit_game_flag) {
@@ -188,7 +207,8 @@ class PlayQuestionScene {
 	void on_key_F5() {
 		if (!state.blitz_played) {
 			blitz_round();
-			f.focus(q_field); 
+			if (va.listening) f.focus_silently(q_field);
+		else f.focus(q_field); 
 		}
 	}
 	bool run() {
@@ -196,8 +216,11 @@ class PlayQuestionScene {
 		while (true) {
 			if (loop_result != -1) break;
 			wait(5);
-			app.touch.monitor();
-			f.monitor();
+			if (!va.listening) {
+				app.touch.monitor();
+				f.monitor();
+			}
+			string v_cmd = va.get_command_non_blocking();
 			gm.prepare_frame();
 			current_selection = -1;
 			int current_focus = f.get_current_focus();
@@ -207,9 +230,12 @@ class PlayQuestionScene {
 					break;
 				}
 			}
-			int newly_focused = gm.draw_question(q.question, q.options, current_selection);
-			if (newly_focused != -1 && newly_focused < int(option_buttons.length())) {
-				f.focus(option_buttons[newly_focused]);
+			if (@q != null) {
+				int newly_focused = gm.draw_question(q.question, q.options, current_selection);
+				if (newly_focused != -1 && newly_focused < int(option_buttons.length())) {
+					if (va.listening) f.focus_silently(option_buttons[newly_focused]);
+					else f.focus(option_buttons[newly_focused]);
+				}
 			}
 			gm.draw_prize_ladder(question_index, prizes);
 			gm.present_frame();
@@ -231,6 +257,22 @@ class PlayQuestionScene {
 				loop_result = 0;
 				break;
 			}
+			if (v_cmd == "status") {
+				on_key_S();
+			} else if (v_cmd == "exit") {
+				play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);
+				safe_stop(app.bg_music);
+				loop_result = 0;
+				break;
+			} else if (v_cmd == "option a" || v_cmd == "alpha" || v_cmd == "apple" || v_cmd == "a") {
+				on_key_A(); continue;
+			} else if (v_cmd == "option b" || v_cmd == "bravo" || v_cmd == "boy" || v_cmd == "b") {
+				on_key_B(); continue;
+			} else if (v_cmd == "option c" || v_cmd == "charlie" || v_cmd == "cat" || v_cmd == "c") {
+				on_key_C(); continue;
+			} else if (v_cmd == "option d" || v_cmd == "delta" || v_cmd == "dog" || v_cmd == "d") {
+				on_key_D(); continue;
+			}
 			for (uint i = 0; i < option_buttons.length(); i++) {
 				if (f.is_pressed(option_buttons[i])) {
 					if (handle_option_selection(session, i, option_buttons, current_selection)) {
@@ -245,7 +287,7 @@ class PlayQuestionScene {
 				}
 			}
 			if (loop_result != -1) break;
-			if (btn_5050 != -1 && f.is_pressed(btn_5050)) {
+			if (btn_5050 != -1 && (f.is_pressed(btn_5050) || v_cmd == "use 50 50")) {
 				int[] removed = session.use_5050();
 				f.set_state(btn_5050, false, false);
 				for (uint i = 0; i < removed.length(); i++) {
@@ -260,7 +302,7 @@ class PlayQuestionScene {
 				}
 				alert(title, msg);
 			}
-			if (btn_phone != -1 && f.is_pressed(btn_phone)) {
+			if (btn_phone != -1 && (f.is_pressed(btn_phone) || v_cmd == "phone a friend")) {
 				string answer = session.use_phone_a_friend();
 				f.set_state(btn_phone, false, false);
 				safe_stop(app.bg_music);
@@ -279,7 +321,7 @@ class PlayQuestionScene {
 				app.bg_music.play_looped();
 				session.resume_timer();
 			}
-			if (btn_audience != -1 && f.is_pressed(btn_audience)) {
+			if (btn_audience != -1 && (f.is_pressed(btn_audience) || v_cmd == "ask the audience")) {
 				session.use_ask_the_audience();
 				f.set_state(btn_audience, false, false);
 				safe_stop(app.bg_music);
@@ -289,7 +331,7 @@ class PlayQuestionScene {
 				app.bg_music.play_looped();
 				session.resume_timer();
 			}
-			if (btn_double != -1 && f.is_pressed(btn_double)) {
+			if (btn_double != -1 && (f.is_pressed(btn_double) || v_cmd == "double dip")) {
 				session.use_double_dip();
 				f.set_state(btn_double, false, false);
 				string title = "Double Dip";
@@ -303,7 +345,7 @@ class PlayQuestionScene {
 				}
 				alert(title, msg);
 			}
-			if (btn_expert != -1 && f.is_pressed(btn_expert)) {
+			if (btn_expert != -1 && (f.is_pressed(btn_expert) || v_cmd == "ask an expert")) {
 				string answer = session.use_ask_an_expert();
 				f.set_state(btn_expert, false, false);
 				string title = "Ask an Expert";

@@ -13,18 +13,12 @@ class voice_recognizer {
 
 class VoiceAssist {
 	private voice_recognizer recognizer;
-	private tone_synth synth;
-	private sound@ snd_wake;
 	private sound@ snd_success;
 	private sound@ snd_fail;
-	private bool available = false;
+	bool available = false;
 	private string[] temporary_commands;
-	private string last_menu_sync = "";
-	private bool listening = false;
-	bool manual_next_enabled = false;
-	bool active = false;
+	bool listening = false;
 	VoiceAssist() {
-		@snd_wake = generate_tone(880, 100); 
 		@snd_fail = generate_tone(440, 100); 
 		@snd_success = generate_tone(1200, 50);
 	}
@@ -39,37 +33,36 @@ class VoiceAssist {
 			available = true;
 			recognizer.stop();
 			recognizer.clear_commands();
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				recognizer.add_command(temporary_commands[i]);
+			}
 			return true;
 		}
 		return false;
 	}
 	void clear_commands() {
+		temporary_commands.resize(0);
 		if (available) {
 			recognizer.stop();
 			recognizer.clear_commands();
-			temporary_commands.resize(0);
-			last_menu_sync = "";
-			listening = false;
 		}
 	}
 	void add_command(const string&in cmd) {
+		string c = cmd.lower().trim_whitespace();
+		temporary_commands.insert_last(c);
 		if (available) {
-			string c = cmd.lower().trim_whitespace();
-			if (recognizer.add_command(c)) {
-				temporary_commands.insert_last(c);
-			}
+			recognizer.add_command(c);
 		}
 	}
 	void start() {
-		if (available && !recognizer.get_active()) {
+		if (available && listening && !recognizer.get_active()) {
 			recognizer.start();
-			listening = true;
+			speak(get_voice_hint(), false);
 		}
 	}
-	void stop() {
+	void force_stop() {
 		if (available && recognizer.get_active()) {
 			recognizer.stop();
-			listening = false;
 		}
 	}
 	int levenshtein_distance(string s1, string s2) {
@@ -94,897 +87,41 @@ class VoiceAssist {
 		}
 		return col[len2];
 	}
-	string wait_for_command(bool draw_question = false, Question@ q = null, int sel = -1, int custom_timeout = 10000, string interrupt_text = "") {
-		if (!available) return "";
-		if (recognizer.get_active()) recognizer.stop();
-		wait(50);
-		recognizer.start();
-		wait(50);
-		if (interrupt_text != "") {
-			speak(interrupt_text, true);
-		} else if (@snd_wake != null) {
-			snd_wake.play();
+	string get_command_non_blocking() {
+		if (!available || !listening) return "";
+		if (key_pressed(KEY_ESCAPE)) {
+			listening = false;
+			force_stop();
+			speak("Voice Assist deactivated.", true);
+			return "";
 		}
-		while(screen_reader_is_speaking() || (app.voice.speaking)) {
-			if (recognizer.get_commands_pending() > 0) {
-				screen_reader_silence();
-				app.voice.stop();
-				break;
-			}
-			update_ui(draw_question, q, sel);
-			wait(5);
-		}
-		if (!recognizer.get_active()) recognizer.start();
-		uint64 start_time = ticks();
-		uint64 timeout = uint64(custom_timeout); 
-		while(ticks() - start_time < timeout) {
-			update_ui(draw_question, q, sel);
-			wait(5);
-			if (key_pressed(KEY_ESCAPE)) {
-				recognizer.stop();
-				return "exit";
-			}
-			if (recognizer.get_commands_pending() > 0) {
-				string heard = recognizer.get_command().lower().trim_whitespace();
-				if (heard == "") continue;
-				recognizer.stop();
-				if (heard == "report progress" || heard == "status") {
-					if (g_fetch_action != "") {
-						speak_wait("The system is currently " + g_fetch_action + ". Current progress is at " + g_fetch_progress + " percent.", false, draw_question, q, sel);
-					} else {
-						speak_wait("There are currently no active background processes to report.", false, draw_question, q, sel);
-					}
-					recognizer.start();
-					start_time = ticks();
-					continue;
-				}
-				for (uint i = 0; i < temporary_commands.length(); i++) {
-					if (heard == temporary_commands[i]) {
-						if (@snd_success != null) snd_success.play();
-						return heard;
-					}
-				}
-				for (uint i = 0; i < temporary_commands.length(); i++) {
-					if (temporary_commands[i] == "*") {
-						if (@snd_success != null) snd_success.play();
-						return heard;
-					}
-				}
-				string best_match = "";
-				int min_dist = 999;
-				for (uint i = 0; i < temporary_commands.length(); i++) {
-					if (temporary_commands[i] == "*") continue;
-					int d = levenshtein_distance(heard, temporary_commands[i]);
-					if (d < min_dist) {
-						min_dist = d;
-						best_match = temporary_commands[i];
-					}
-				}
-				int threshold = (best_match.length() > 8) ? 3 : ((best_match.length() >= 5) ? 2 : 1);
-				if (best_match != "" && min_dist <= threshold) {
-					speak_wait("I understood '" + best_match + "'. Is this correct? Please confirm with 'Yes' or 'No'.", true, draw_question, q, sel);
-					string old_cmds = join(temporary_commands, "|");
-					clear_commands();
-					add_command("yes");
-					add_command("no");
-					string confirm = wait_for_command(draw_question, q, sel);
-					if (confirm == "yes") {
-						if (@snd_success != null) snd_success.play();
-						return best_match;
-					} else if (confirm == "exit") {
-						return "exit";
-					} else {
-						clear_commands();
-						string[] parts = old_cmds.split("|");
-						for(uint p=0; p<parts.length(); p++) add_command(parts[p]);
-						start_time = ticks();
-						recognizer.start();
-						continue; 
-					}
-				}
-				recognizer.start();
-			}
-		}
-		if (@snd_fail != null) snd_fail.play();
-		recognizer.stop(); 
-		return "";
-	}
-	void run() {
-		if (app.current_state == STATE_IN_GAME) {
-			va_read_current_question();
-			return;
-		}
-		if (!setup()) {
-			alert("Voice Assist Error", "Initialization of the voice recognition engine has failed. Please ensure your recording device is functional.");
-			return;
-		}
-		active = true;
-		if (app.current_state == STATE_LANGUAGE_SELECTION) {
-			if (va_language_selection() == "exit") {
-				active = false;
-				return;
-			}
-			active = false;
-			return;
-		}
-		if (app.current_state == STATE_CATEGORY_SELECTION) {
-			if (va_category_selection(state.current_lang) == "exit") {
-				active = false;
-				return;
-			}
-			active = false;
-			return;
-		}
-		if (app.current_state == STATE_SETTINGS) {
-			if (va_settings_menu() == "exit") {
-				active = false;
-				return;
-			}
-			active = false;
-			return;
-		}
-		if (app.current_state == STATE_STATS) {
-			va_stats();
-			active = false;
-			return;
-		}
-		if (app.current_state == STATE_CREDITS) {
-			va_credits();
-			active = false;
-			return;
-		}
-		if (app.current_state == STATE_CUSTOM_PACKS) {
-			if (va_custom_packs_menu() == "exit") {
-				active = false;
-				return;
-			}
-			active = false;
-			return;
-		}
-		string prompt = "Welcome to Voice Assist. You are at the Main Menu. Options: Start Game, Download Category for Offline, Manage Custom Packs, Statistics, Settings, Credits, and Exit. State your command.";
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("start game");
-			add_command("download category for offline");
-			add_command("manage custom packs");
-			add_command("statistics");
-			add_command("settings");
-			add_command("credits");
-			add_command("help");
-			add_command("exit");
-			string cmd = wait_for_command(false, null, -1, 20000, first_run ? prompt : "");
-			first_run = false;
-			if (cmd == "") continue;
-			if (cmd == "start game") {
-				if (va_language_selection() == "exit") {
-					speak_wait("Exiting Voice Assist.", true);
-					stop();
-					active = false;
-					return;
-				}
-				first_run = true;
-			} else if (cmd == "download category for offline" || cmd == "download category") {
-				va_download_flow();
-				first_run = true;
-			} else if (cmd == "manage custom packs") {
-				if (va_custom_packs_menu() == "exit") {
-					speak_wait("Exiting Voice Assist.", true);
-					stop();
-					active = false;
-					return;
-				}
-				first_run = true;
-			} else if (cmd == "statistics") {
-				va_stats();
-				first_run = true;
-			} else if (cmd == "settings") {
-				if (va_settings_menu() == "exit") {
-					speak_wait("Exiting Voice Assist.", true);
-					stop();
-					active = false;
-					return;
-				}
-				first_run = true;
-			} else if (cmd == "credits") {
-				va_credits();
-				first_run = true;
-			} else if (cmd == "help") {
-				speak_wait("Commands: Start Game, Download Category for Offline, Manage Custom Packs, Statistics, Settings, Credits, or Exit.", true);
-			} else if (cmd == "exit") {
-				speak_wait("Exiting Voice Assist.", true);
-				stop();
-				active = false;
-				return; 
-			}
-		}
-	}
-	void va_download_flow() {
-		speak_wait("Download Category. Please select language.", true);
-		string lang = va_language_selection_only();
-		if (lang == "back" || lang == "exit") return;
-		speak_wait("Please select category to download.", true);
-		int cat_id = va_category_selection_only();
-		if (cat_id == -1) return;
-		speak_wait("Starting download...", true);
-		download_category(cat_id, lang);
-		speak_wait("Download complete.", true);
-	}
-	string va_language_selection_only() {
-		string prompt = "Select Language: English, Hindi, French, or Back.";
-		while(true) {
-			clear_commands();
-			add_command("english");
-			add_command("hindi");
-			add_command("french");
-			add_command("back");
-			string cmd = wait_for_command(false, null, -1, 20000, prompt);
-			if (cmd == "english") return "en";
-			if (cmd == "hindi") return "hi";
-			if (cmd == "french") return "fr";
-			if (cmd == "back") return "back";
-			if (cmd == "exit") return "exit";
-		}
-		return "back";
-	}
-	int va_category_selection_only() {
-		string prompt = "Select Category or say Back.";
-		while(true) {
-			clear_commands();
-			add_command("random categories");
-			add_command("general knowledge");
-			add_command("books");
-			add_command("film");
-			add_command("music");
-			add_command("television");
-			add_command("video games");
-			add_command("board games");
-			add_command("science & nature");
-			add_command("computers");
-			add_command("mathematics");
-			add_command("mythology");
-			add_command("sports");
-			add_command("geography");
-			add_command("history");
-			add_command("politics");
-			add_command("art");
-			add_command("animals");
-			add_command("back");
-			string cmd = wait_for_command(false, null, -1, 20000, prompt);
-			if (cmd == "random categories") return 0;
-			if (cmd == "general knowledge") return 9;
-			if (cmd == "books") return 10;
-			if (cmd == "film") return 11;
-			if (cmd == "music") return 12;
-			if (cmd == "television") return 14;
-			if (cmd == "video games") return 15;
-			if (cmd == "board games") return 16;
-			if (cmd == "science & nature") return 17;
-			if (cmd == "computers") return 18;
-			if (cmd == "mathematics") return 19;
-			if (cmd == "mythology") return 20;
-			if (cmd == "sports") return 21;
-			if (cmd == "geography") return 22;
-			if (cmd == "history") return 23;
-			if (cmd == "politics") return 24;
-			if (cmd == "art") return 25;
-			if (cmd == "animals") return 27;
-			if (cmd == "back" || cmd == "exit") return -1;
-		}
-		return -1;
-	}
-	string va_language_selection() {
-		string prompt = "Select Language: English, Hindi, French, or Back.";
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("english");
-			add_command("hindi");
-			add_command("french");
-			add_command("back");
-			string lang_cmd = wait_for_command(false, null, -1, 20000, first_run ? prompt : "");
-			first_run = false;
-			if (lang_cmd == "") continue;
-			if (lang_cmd == "exit") return "exit";
-			string lang = "en";
-			if (lang_cmd == "hindi") lang = "hi";
-			else if (lang_cmd == "french") lang = "fr";
-			else if (lang_cmd == "back") return "back";
-			state.current_lang = lang;
-			if (va_category_selection(lang) == "exit") return "exit";
-			first_run = true;
-		}
-		return "back";
-	}
-	string va_category_selection(string lang) {
-		string prompt = "Select Category or say Back.";
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("random categories");
-			add_command("general knowledge");
-			add_command("books");
-			add_command("film");
-			add_command("music");
-			add_command("television");
-			add_command("video games");
-			add_command("board games");
-			add_command("science & nature");
-			add_command("computers");
-			add_command("mathematics");
-			add_command("mythology");
-			add_command("sports");
-			add_command("geography");
-			add_command("history");
-			add_command("politics");
-			add_command("art");
-			add_command("animals");
-			add_command("back");
-			string cat_cmd = wait_for_command(false, null, -1, 20000, first_run ? prompt : "");
-			first_run = false;
-			if (cat_cmd == "") continue;
-			if (cat_cmd == "exit") return "exit";
-			int cat_id = -1;
-			if (cat_cmd == "random categories") cat_id = 0;
-			else if (cat_cmd == "general knowledge") cat_id = 9;
-			else if (cat_cmd == "books") cat_id = 10;
-			else if (cat_cmd == "film") cat_id = 11;
-			else if (cat_cmd == "music") cat_id = 12;
-			else if (cat_cmd == "television") cat_id = 14;
-			else if (cat_cmd == "video games") cat_id = 15;
-			else if (cat_cmd == "board games") cat_id = 16;
-			else if (cat_cmd == "science & nature") cat_id = 17;
-			else if (cat_cmd == "computers") cat_id = 18;
-			else if (cat_cmd == "mathematics") cat_id = 19;
-			else if (cat_cmd == "mythology") cat_id = 20;
-			else if (cat_cmd == "sports") cat_id = 21;
-			else if (cat_cmd == "geography") cat_id = 22;
-			else if (cat_cmd == "history") cat_id = 23;
-			else if (cat_cmd == "politics") cat_id = 24;
-			else if (cat_cmd == "art") cat_id = 25;
-			else if (cat_cmd == "animals") cat_id = 27;
-			else if (cat_cmd == "back") return "back";
-			if (cat_id == -1) continue;
-			speak_wait("Initializing trivia session. Round 1 starting.", true);
-			init_questions(lang, cat_id);
-			if (questions.length() == 0) {
-				speak_wait("No questions found.", true);
-				first_run = true;
-				continue;
-			} else {
-				state.reset();
-				state.current_lang = lang;
-				state.category_id = cat_id;
-				va_game_loop();
-				return "exit"; 
-			}
-		}
-		return "back";
-	}
-	void va_game_loop() {
-		QuizSession session;
-		for (uint i = 0; i < questions.length(); i++) {
-			state.current_question_index = i;
-			if (!va_play_question(session, questions[i], i)) {
-				int current_prize = (i > 0) ? parse_int(prizes[i-1].replace(",", "")) : 0;
-				stats.record_game(current_prize, state.bonus_money, i, state.lifelines_used_count);
-				speak_wait("Your trivia session has concluded. Returning to the main menu.", false); 
-				return; 
-			}
-			if (i < 8) {
-				play_sfx("sahiJawab_10-02-26_16-31-59-720.mp3", true);
-			} else {
-				play_sfx("SahiJawab2_15-02-26_15-12-00-471.mp3", true);
-			}
-			speak_wait("That is the correct answer. Moving forward to the next round.", true);
-			if (manual_next_enabled && i < questions.length() - 1) {
-				clear_commands();
-				add_command("next");
-				add_command("continue");
-				speak_wait("Round complete. Say 'Next' or 'Continue' when you are ready to proceed.", false); 
-				wait_for_command();
-			}
-		}
-		safe_stop(app.bg_music);
-		string total_prize_str = prizes[questions.length() - 1];
-		int base_prize = parse_int(total_prize_str.replace(",", ""));
-		stats.record_game(base_prize, state.bonus_money, questions.length(), state.lifelines_used_count);
-		speak_wait("Incredible performance! You have successfully completed the trivia challenge and won the grand prize of " + total_prize_str + " rupees! Congratulations on your outstanding achievement.", true);
-		wait(2000); 
-	}
-	bool va_play_question(QuizSession& session, Question@ q, int question_index) {
-		session.start_question(q, question_index);
-		if (question_index < 10) {
-			load_sound(app.bg_music, "clock-sound.mp3");
-			app.bg_music.volume = 0; 
-		} else {
-			load_sound(app.bg_music, "gameMusic.mp3");
-			app.bg_music.volume = 0; 
-		}
-		app.bg_music.play_looped();
-		string current_val = prizes[question_index];
-		string q_header = "Question number " + (question_index + 1) + " for " + current_val + " rupees.";
-		string q_text = q.question;
-		string opts_text = "Option A: " + q.options[0] + ". Option B: " + q.options[1] + ". Option C: " + q.options[2] + ". Option D: " + q.options[3] + ".";
-		string prompt = q_header + " " + q_text + " " + opts_text;
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("option a"); add_command("alpha"); add_command("apple");
-			add_command("option b"); add_command("bravo"); add_command("boy"); add_command("baker");
-			add_command("option c"); add_command("charlie"); add_command("cat");
-			add_command("option d"); add_command("delta"); add_command("dog"); add_command("david");
-			add_command("a");
-			add_command("b");
-			add_command("c");
-			add_command("d");
-			add_command("repeat");
-			add_command("status");
-			add_command("exit");
-			if (state.lifeline_5050) add_command("use 50-50");
-			if (state.lifeline_phone) add_command("phone a friend");
-			if (state.lifeline_audience) add_command("ask the audience");
-			if (state.lifeline_double_dip) add_command("double dip");
-			if (state.lifeline_expert) add_command("ask an expert");
-			string ans_cmd = wait_for_command(true, q, -1, 30000, first_run ? (prompt + " Standing by for your answer or lifeline request.") : "");
-			first_run = false;
-			if (ans_cmd == "") continue;
-			if (ans_cmd == "exit") return false;
-			if (ans_cmd == "repeat") {
-				first_run = true;
-				continue;
-			}
-			if (ans_cmd == "status") {
-				int left = (state.lifeline_5050?1:0)+(state.lifeline_phone?1:0)+(state.lifeline_audience?1:0)+(state.lifeline_double_dip?1:0)+(state.lifeline_expert?1:0);
-				speak_wait("Current round is " + (question_index+1) + ". The active prize value is " + current_val + " rupees. You have " + left + " lifelines remaining.", true, true, q, -1);
-				continue;
-			}
-			if (ans_cmd == "use 50-50" && state.lifeline_5050) {
-				speak_wait("Activating the 50-50 lifeline. Two incorrect options are being removed from consideration.", true, true, q, -1);
-				int[] removed = session.use_5050();
-				string remaining = "The remaining options are: ";
-				for(uint i=0; i<4; i++) {
-					bool is_removed = false;
-					for(uint j=0; j<removed.length(); j++) if(removed[j] == int(i)) is_removed = true;
-					if(!is_removed) remaining += "Option " + get_option_letter(i) + ": " + q.options[i] + ". ";
-				}
-				speak_wait(remaining + " Resuming the round in 5 seconds.", false, true, q, -1); 
-				wait(5000);
-				continue;
-			}
-			if (ans_cmd == "phone a friend" && state.lifeline_phone) {
-				speak_wait("Initiating a call to your designated friend. Please stand by.", true, true, q, -1);
-				safe_stop(app.bg_music);
-				session.pause_timer();
-				play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
-				string answer = session.use_phone_a_friend();
-				speak_wait("Your friend suggests the following: " + answer + ".", false, true, q, -1); 
-				speak_wait("Resuming the countdown in 5 seconds.", false, true, q, -1); 
-				wait(5000);
-				app.bg_music.play_looped();
-				session.resume_timer();
-				continue;
-			}
-			if (ans_cmd == "ask the audience" && state.lifeline_audience) {
-				speak_wait("Requesting input from the live audience.", true, true, q, -1);
-				safe_stop(app.bg_music);
-				session.pause_timer();
-				play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
-				session.use_ask_the_audience();
-				va_show_audience_poll(q, session);
-				speak_wait("The poll results are in. Please wait 5 seconds before making your choice.", false, true, q, -1); 
-				wait(5000);
-				app.bg_music.play_looped();
-				session.resume_timer();
-				continue;
-			}
-			if (ans_cmd == "double dip" && state.lifeline_double_dip) {
-				speak_wait("The Double Dip lifeline has been activated. You are now permitted to provide two consecutive attempts for this round.", true, true, q, -1);
-				session.use_double_dip();
-				continue;
-			}
-			if (ans_cmd == "ask an expert" && state.lifeline_expert) {
-				speak_wait("Consulting with our subject matter expert.", true, true, q, -1);
-				string answer = session.use_ask_an_expert();
-				speak_wait("The expert highly recommends selecting: " + answer + ".", false, true, q, -1); 
-				speak_wait("Resuming in 5 seconds.", false, true, q, -1); 
-				wait(5000);
-				continue;
-			}
-			int selected_idx = -1;
-			if (ans_cmd == "option a" || ans_cmd == "a" || ans_cmd == "alpha" || ans_cmd == "apple") selected_idx = 0;
-			else if (ans_cmd == "option b" || ans_cmd == "b" || ans_cmd == "bravo" || ans_cmd == "boy" || ans_cmd == "baker") selected_idx = 1;
-			else if (ans_cmd == "option c" || ans_cmd == "c" || ans_cmd == "charlie" || ans_cmd == "cat") selected_idx = 2;
-			else if (ans_cmd == "option d" || ans_cmd == "d" || ans_cmd == "delta" || ans_cmd == "dog" || ans_cmd == "david") selected_idx = 3;
-			if (selected_idx == -1) continue;
-			while(true) {
-				clear_commands();
-				add_command("yes");
-				add_command("no");
-				string letter = get_option_letter(selected_idx);
-				speak_wait("You have selected Option " + letter + ". Is that your final answer? Please confirm by saying 'Yes' or 'No'.", true, true, q, selected_idx);
-				string confirm = wait_for_command(true, q, selected_idx);
-				if (confirm == "") continue;
-				if (confirm == "no") {
-					speak_wait("Selection cancelled. Please state your answer again.", true, true, q, selected_idx);
-					break; 
-				} else if (confirm == "exit") {
-					return false;
-				}
-				safe_stop(app.bg_music);
-				play_sfx("Kbc Option Lock Tune.mp3", true);
-				if (selected_idx == q.correct_index) {
-					return true;
-				} else {
-					if (session.double_dip_active) {
-						speak_wait("I'm sorry, that answer is incorrect. However, since Double Dip is active, you have one final attempt remaining.", true, true, q, selected_idx);
-						session.double_dip_active = false;
-						app.bg_music.play_looped();
-						break; 
-					}
-					play_sfx("Kbc Galat Jawab.mp3", true);
-					va_read_correct_answer(q.correct_index, q.options[q.correct_index]);
-					speak_wait("Please stand by while we return you to the main menu.", false); 
-					wait(3000); 
-					return false;
+		if (recognizer.get_commands_pending() > 0) {
+			string heard = recognizer.get_command().lower().trim_whitespace();
+			if (heard == "") return "";
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				if (heard == temporary_commands[i] || temporary_commands[i] == "*") {
+					if (@snd_success != null) snd_success.play();
+					return temporary_commands[i];
 				}
 			}
-		}
-		return false;
-	}
-	void va_read_correct_answer(int idx, string text) {
-		string letter = get_option_letter(idx);
-		speak_wait("I'm sorry, but that is the incorrect answer. The correct response was Option " + letter + ": " + text + ". Your trivia session has concluded.", true);
-	}
-	void va_show_audience_poll(Question@ q, QuizSession& session) {
-		int[] votes(q.options.length());
-		int total_votes = 100;
-		int correct_votes = random(40, 80);
-		votes[q.correct_index] = correct_votes;
-		total_votes -= correct_votes;
-		for (uint i = 0; i < votes.length(); i++) {
-			if (int(i) == q.correct_index) continue;
-			if (total_votes <= 0) { votes[i] = 0; continue; }
-			bool is_last = true;
-			for (uint j = i + 1; j < votes.length(); j++) {
-				if (int(j) != q.correct_index) { is_last = false; break; }
-			}
-			if (is_last) votes[i] = total_votes;
-			else {
-				int v = random(0, total_votes);
-				votes[i] = v;
-				total_votes -= v;
-			}
-		}
-		string results = "The audience has voted. The results are as follows: ";
-		for(uint i=0; i<votes.length(); i++) {
-			string letter = get_option_letter(i);
-			results += "Option " + letter + ": " + votes[i] + " percent. ";
-		}
-		speak_wait(results, false, true, q, -1); 
-	}
-	void va_read_current_question() {
-		if (@app.last_question == null) return;
-		string q_header = "Question number " + (state.current_question_index + 1) + " for " + prizes[state.current_question_index] + " rupees.";
-		string q_text = app.last_question.question;
-		string opts_text = "Option A: " + app.last_question.options[0] + ". Option B: " + app.last_question.options[1] + ". Option C: " + app.last_question.options[2] + ". Option D: " + app.last_question.options[3] + ".";
-		clear_commands();
-		add_command("a"); add_command("b"); add_command("c"); add_command("d");
-		add_command("option a"); add_command("option b"); add_command("option c"); add_command("option d");
-		add_command("alpha"); add_command("bravo"); add_command("charlie"); add_command("delta");
-		add_command("repeat");
-		add_command("exit");
-		if (state.lifeline_5050) add_command("use 50-50");
-		if (state.lifeline_phone) add_command("phone a friend");
-		if (state.lifeline_audience) add_command("ask the audience");
-		if (state.lifeline_double_dip) add_command("double dip");
-		if (state.lifeline_expert) add_command("ask an expert");
-		string cmd = wait_for_command(true, app.last_question, -1, 20000, q_header + " " + q_text + " " + opts_text);
-		if (cmd == "" || cmd == "exit") return;
-		if (cmd == "repeat") {
-			va_read_current_question();
-			return;
-		}
-		int selected_idx = -1;
-		if (cmd == "option a" || cmd == "a" || cmd == "alpha") selected_idx = 0;
-		else if (cmd == "option b" || cmd == "b" || cmd == "bravo") selected_idx = 1;
-		else if (cmd == "option c" || cmd == "c" || cmd == "charlie") selected_idx = 2;
-		else if (cmd == "option d" || cmd == "d" || cmd == "delta") selected_idx = 3;
-		if (selected_idx != -1) {
-			string letter = get_option_letter(selected_idx);
-			speak_wait("You have selected Option " + letter + ". Is that your final answer? Please confirm with 'Yes' or 'No'.", true);
-			clear_commands();
-			add_command("yes");
-			add_command("no");
-			string confirm = wait_for_command();
-			if (confirm == "yes") {
-				if (selected_idx == app.last_question.correct_index) {
-					speak_wait("That is the correct answer!", true);
-					app.active_scene.loop_result = 1;
-				} else {
-					if (app.active_scene.session.double_dip_active) {
-						speak_wait("I'm sorry, that answer is incorrect. However, since Double Dip is active, you have one final attempt remaining.", true);
-						app.active_scene.session.double_dip_active = false;
-					} else {
-						play_sfx("Kbc Galat Jawab.mp3", true);
-						va_read_correct_answer(app.last_question.correct_index, app.last_question.options[app.last_question.correct_index]);
-						app.active_scene.exit_game_flag = true;
-						app.active_scene.loop_result = 0;
-					}
+			string best_match = "";
+			int min_dist = 999;
+			for (uint i = 0; i < temporary_commands.length(); i++) {
+				if (temporary_commands[i] == "*") continue;
+				int d = levenshtein_distance(heard, temporary_commands[i]);
+				if (d < min_dist) {
+					min_dist = d;
+					best_match = temporary_commands[i];
 				}
 			}
-		} else if (cmd.find("50-50") != -1 || cmd.find("friend") != -1 || cmd.find("audience") != -1 || cmd.find("dip") != -1 || cmd.find("expert") != -1) {
-			speak_wait("You requested a lifeline. Please use the corresponding shortcut key on your keyboard.", true);
-		}
-	}
-	string va_settings_menu() {
-		string prompt = "You are currently at the Settings screen. The options available here are to Enable or Disable: Menu Music, Startup Intro, Visuals, High Contrast, Heartbeat sound, and Manual Progression. Say 'Back' to return to the main menu.";
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("enable music");
-			add_command("disable music");
-			add_command("enable startup intro");
-			add_command("disable startup intro");
-			add_command("enable visuals");
-			add_command("disable visuals");
-			add_command("enable high contrast");
-			add_command("disable high contrast");
-			add_command("enable heartbeat");
-			add_command("disable heartbeat");
-			add_command("enable manual progression");
-			add_command("disable manual progression");
-			add_command("back");
-			string cmd = wait_for_command(false, null, -1, 20000, first_run ? prompt : "");
-			first_run = false;
-			if (cmd == "") continue;
-			if (cmd == "exit") return "exit";
-			if (cmd.find("music") != -1) {
-				bool enable = cmd.starts_with("enable");
-				app.config.write_string("menu_music_enabled", enable ? "true" : "false");
-				app.menu_music_enabled = enable;
-				if (!enable) safe_stop(app.bg_music);
-				else if (!app.bg_music.playing) load_menu_music();
-				speak_wait("The background menu music has been " + (enable ? "enabled." : "disabled."), true);
-				first_run = true;
-			} else if (cmd.find("startup") != -1) {
-				bool enable = cmd.starts_with("enable");
-				app.config.write_string("play_startup_sound", enable ? "true" : "false");
-				speak_wait("The application startup intro has been " + (enable ? "enabled." : "disabled."), true);
-				first_run = true;
-			} else if (cmd.find("visuals") != -1) {
-				bool enable = cmd.starts_with("enable");
-				app.config.write_string("visuals_enabled", enable ? "true" : "false");
-				gm.enabled = enable;
-				speak_wait("The visual rendering system has been " + (enable ? "enabled." : "disabled."), true);
-				first_run = true;
-			} else if (cmd.find("high contrast") != -1) {
-				bool enable = cmd.starts_with("enable");
-				app.config.write_string("high_contrast", enable ? "true" : "false");
-				gm.high_contrast = enable;
-				speak_wait("High contrast accessibility mode has been " + (enable ? "enabled." : "disabled."), true);
-				first_run = true;
-			} else if (cmd.find("heartbeat") != -1) {
-				bool enable = cmd.starts_with("enable");
-				app.config.write_string("anticipation_enabled", enable ? "true" : "false");
-				app.anticipation_enabled = enable;
-				speak_wait("The heartbeat anticipation sound has been " + (enable ? "enabled." : "disabled."), true);
-				first_run = true;
-			} else if (cmd.find("progression") != -1) {
-				bool enable = cmd.starts_with("enable");
-				manual_next_enabled = enable;
-				app.config.write_string("manual_next_question", enable ? "true" : "false");
-				speak_wait("Manual question progression has been " + (enable ? "enabled. You will now be prompted before each new question." : "disabled."), true);
-				first_run = true;
-			} else if (cmd == "back") {
-				return "back";
+			int threshold = (best_match.length() > 8) ? 3 : ((best_match.length() >= 5) ? 2 : 1);
+			if (best_match != "" && min_dist <= threshold) {
+				if (@snd_success != null) snd_success.play();
+				return best_match;
 			}
-		}
-		return "back";
-	}
-	string va_custom_packs_menu() {
-		bool first_run = true;
-		while(true) {
-			string path = get_custom_questions_path();
-			string[] files = find_files(path + "*.json");
-			clear_commands();
-			add_command("create");
-			add_command("back");
-			string pack_list = "";
-			if (files.length() == 0) {
-				pack_list = "Your local custom question library is currently empty. You can say 'Create' to start building a new pack, or 'Back' to return to the main menu.";
-			} else {
-				pack_list = "Your library contains the following packs: ";
-				for (uint i = 0; i < files.length(); i++) {
-					string name = files[i].replace(".json", "");
-					add_command(name);
-					pack_list += name + ", ";
-				}
-				pack_list += ". Please state the name of a pack to manage it, say 'Create' to start a new pack, or 'Back' to return.";
-			}
-			string cmd = wait_for_command(false, null, -1, 20000, first_run ? pack_list : "");
-			first_run = false;
-			if (cmd == "") continue;
-			if (cmd == "exit") return "exit";
-			if (cmd == "create") {
-				va_create_pack();
-				first_run = true;
-			} else if (cmd == "back") {
-				return "back";
-			} else {
-				for (uint i = 0; i < files.length(); i++) {
-					if (cmd == files[i].replace(".json", "").lower()) {
-						if (va_custom_pack_actions(path + files[i]) == "exit") return "exit";
-						first_run = true;
-						break;
-					}
-				}
-			}
-		}
-		return "back";
-	}
-	void va_create_pack() {
-		speak_wait("You have started the Voice-Driven Pack Creator. Please follow the auditory prompts carefully. You can say 'Cancel' at any time to discard the current pack.", true);
-		string pack_name = request_dictation("Please state the desired name for your new question pack.");
-		if (pack_name == "" || pack_name == "cancel") {
-			speak_wait("Creation process aborted.");
-			return;
-		}
-		if (pack_name == "exit") return;
-		json_object@ root = json_object();
-		root.set("name", pack_name);
-		json_array@ q_arr = json_array();
-		while(true) {
-			speak_wait("Adding a new question to the '" + pack_name + "' collection.", true);
-			string q_text = request_dictation("Please dictate the text for the question.");
-			if (q_text == "" || q_text == "cancel") break;
-			if (q_text == "exit") return;
-			string o1 = request_dictation("Please dictate Option A.");
-			if (o1 == "exit") return;
-			string o2 = request_dictation("Please dictate Option B.");
-			if (o2 == "exit") return;
-			string o3 = request_dictation("Please dictate Option C.");
-			if (o3 == "exit") return;
-			string o4 = request_dictation("Please dictate Option D.");
-			if (o4 == "exit") return;
-			int correct_idx = 0;
-			while(true) {
-				clear_commands();
-				add_command("a"); add_command("b"); add_command("c"); add_command("d");
-				speak_wait("Which of the options you provided is the correct answer? Please say A, B, C, or D.", true);
-				string correct_cmd = wait_for_command();
-				if (correct_cmd == "") continue;
-				if (correct_cmd == "exit") return;
-				int temp_idx = 0;
-				if (correct_cmd == "b") temp_idx = 1;
-				else if (correct_cmd == "c") temp_idx = 2;
-				else if (correct_cmd == "d") temp_idx = 3;
-				string letter = get_option_letter(temp_idx);
-				string opt_text = (temp_idx == 0 ? o1 : (temp_idx == 1 ? o2 : (temp_idx == 2 ? o3 : o4)));
-				speak_wait("You have selected Option " + letter + ": '" + opt_text + "' as the correct answer. Is this correct? Please say 'Yes' or 'No'.", true);
-				clear_commands();
-				add_command("yes");
-				add_command("no");
-				string confirm = wait_for_command();
-				if (confirm == "yes") {
-					correct_idx = temp_idx;
-					break;
-				}
-				if (confirm == "exit") return;
-			}
-			json_object@ q_obj = json_object();
-			q_obj.set("question", q_text);
-			json_array@ opts = json_array();
-			opts.add(o1); opts.add(o2); opts.add(o3); opts.add(o4);
-			q_obj.set("options", opts);
-			q_obj.set("correct_index", correct_idx);
-			q_arr.add(q_obj);
-			clear_commands();
-			add_command("add another");
-			add_command("finish");
-			speak_wait("Question successfully added. Say 'Add Another' to provide more questions, or 'Finish' to save and exit.", true);
-			string next_action = wait_for_command();
-			if (next_action == "exit") return;
-			if (next_action != "add another") break;
-		}
-		if (q_arr.size() > 0) {
-			root.set("questions", q_arr);
-			string path = get_custom_questions_path();
-			string filename = path + pack_name + ".json";
-			file_put_contents(filename, root.stringify());
-			speak_wait("Success! The trivia pack '" + pack_name + "' has been saved to your library.", true);
-		} else {
-			speak_wait("No questions were provided. The creation process has been discarded.", true);
-		}
-	}
-	string request_dictation(string prompt, bool draw_q = false, Question@ q = null, int sel = -1) {
-		while(true) {
-			clear_commands();
-			add_command("*");
-			string result = wait_for_command(draw_q, q, sel, 30000, prompt); 
-			if (result == "" || result == "exit" || result == "cancel") return result;
-			speak_wait("I captured: '" + result + "'. Is this correct? Please say 'Yes' to confirm or 'No' to re-dictate.", true, draw_q, q, sel);
-			clear_commands();
-			add_command("yes");
-			add_command("no");
-			add_command("cancel");
-			string confirm = wait_for_command(draw_q, q, sel);
-			if (confirm == "yes") return result;
-			if (confirm == "exit") return "exit";
-			if (confirm == "cancel") return "cancel";
+			if (@snd_fail != null) snd_fail.play();
 		}
 		return "";
-	}
-	string va_custom_pack_actions(string filename) {
-		string short_name = filename.substr(filename.find_last_of("\\/")+1).replace(".json", "");
-		string prompt = "You are currently managing the '" + short_name + "' pack. Your available actions are: 'Play', 'Delete', or 'Back'.";
-		bool first_run = true;
-		while(true) {
-			clear_commands();
-			add_command("play");
-			add_command("delete");
-			add_command("back");
-			string action = wait_for_command(false, null, -1, 20000, first_run ? prompt : "");
-			first_run = false;
-			if (action == "") continue;
-			if (action == "exit") return "exit";
-			if (action == "play") {
-				speak_wait("Loading custom question data for '" + short_name + "'. Preparing session.", true);
-				if (load_custom_questions(filename)) {
-					state.reset();
-					state.current_lang = "en";
-					va_game_loop();
-					return "exit";
-				}
-			} else if (action == "delete") {
-				speak_wait("Security Confirmation: You are about to permanently delete the '" + short_name + "' pack. This action is irreversible. Please confirm by saying 'Yes' or 'No'.", true);
-				clear_commands();
-				add_command("yes");
-				add_command("no");
-				string confirm = wait_for_command();
-				if (confirm == "yes") {
-					file_delete(filename);
-					speak_wait("The pack has been successfully removed from your system.", true);
-					return "back";
-				}
-				if (confirm == "exit") return "exit";
-				first_run = true;
-			} else if (action == "back") {
-				return "back";
-			}
-		}
-		return "back";
-	}
-	void va_stats() {
-		speak_wait("Generating your Statistics Report.", true);
-		speak_wait("Total trivia sessions completed across all modes: " + stats.total_games_played + ".", false); 
-		speak_wait("The highest prize you have earned in a single session is: " + stats.format_currency(stats.highest_prize) + " rupees.", false); 
-		speak_wait("Your cumulative career earnings to date total: " + stats.format_currency(stats.total_earnings) + " rupees.", false); 
-		speak_wait("Report complete. Say 'Back' or state another main menu destination.", false); 
-	}
-	void va_credits() {
-		speak_wait("Quizzy was developed by the team at Boostof Studios. Project leads and primary software engineers: Aman Kumar Gupta and Aryan. Art direction and visual consultancy provided by Shiva Choudhary. The application is built upon the Non-Visual Gaming Toolkit framework. We sincerely thank you for playing and for your support of accessible gaming!", true);
-	}
-	void update_ui(bool draw_question, Question@ q, int sel) {
-		app.touch.monitor();
-		app.input.monitor();
-		gm.prepare_frame();
-		if (draw_question && @q != null) {
-			gm.draw_question(q.question, q.options, sel);
-			gm.draw_prize_ladder(state.current_question_index, prizes);
-		} else {
-			gm.draw_logo();
-		}
-		gm.present_frame();
-	}
-	void speak_wait(const string&in text, bool interrupt = true, bool draw_q = false, Question@ q = null, int sel = -1) {
-		speak(text, interrupt);
-		wait(100); 
-		while(screen_reader_is_speaking() || app.voice.speaking) {
-			update_ui(draw_q, q, sel);
-			wait(10);
-		}
-		wait(100); 
 	}
 }
 
@@ -995,8 +132,48 @@ string get_option_letter(int index) {
 	return "D";
 }
 
+string get_voice_hint() {
+	if (app.current_dialog_text != "") {
+		return app.current_dialog_text + " Say Yes or No.";
+	}
+	if (app.current_state == STATE_MAIN_MENU) return "Main menu. Say start game, download category, manage custom packs, statistics, settings, credits, or exit.";
+	if (app.current_state == STATE_LANGUAGE_SELECTION) return "Select language. Say English, Hindi, French, or back.";
+	if (app.current_state == STATE_CATEGORY_SELECTION) return "Select category. Say random categories, general knowledge, books, film, music, television, video games, board games, science and nature, computers, mathematics, mythology, sports, geography, history, politics, art, animals, or back.";
+	if (app.current_state == STATE_SETTINGS) return "Settings. You can say back.";
+	if (app.current_state == STATE_CREDITS) return "Credits. Say back.";
+	if (app.current_state == STATE_CUSTOM_PACKS) return "Custom packs. Say create, open pack from external location, or say the pack name, or back.";
+	if (app.current_state == STATE_IN_GAME && @app.last_question != null) {
+		string t = app.last_question.question + ". ";
+		for (uint i = 0; i < app.last_question.options.length(); i++) {
+			t += "Option " + get_option_letter(i) + ": " + app.last_question.options[i] + ". ";
+		}
+		string lifelines = "";
+		if (state.lifeline_5050) lifelines += " 50 50,";
+		if (state.lifeline_phone) lifelines += " phone a friend,";
+		if (state.lifeline_audience) lifelines += " ask the audience,";
+		if (state.lifeline_double_dip) lifelines += " double dip,";
+		if (state.lifeline_expert) lifelines += " ask an expert,";
+		if (lifelines != "") t += " Available lifelines:" + lifelines;
+		return t + " Or exit.";
+	}
+	return "Voice assist active. Say a valid command for the current screen.";
+}
 VoiceAssist va;
 
 void run_voice_assist_mode() {
-	va.run();
+	if (!va.available) {
+		if (!va.setup()) {
+			alert("Voice Assist Error", "Initialization of the voice recognition engine has failed. Please ensure your recording device is functional.");
+			return;
+		}
+	}
+	if (va.listening) {
+		va.listening = false;
+		va.force_stop();
+		speak("Voice Assist deactivated.", true);
+	} else {
+		va.listening = true;
+		va.start();
+		speak("Voice Assist activated. " + get_voice_hint(), true);
+	}
 }
