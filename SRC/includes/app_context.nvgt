@@ -30,6 +30,7 @@ class AppContext {
 	tts_voice voice;
 	settings config;
 	string current_dialog_text = "";
+	string currency = "INR";
 }
 
 AppContext app;

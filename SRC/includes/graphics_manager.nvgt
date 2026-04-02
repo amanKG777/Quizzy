@@ -213,7 +213,7 @@ class graphics_manager {
 			cached_prize_ms_imgs.resize(len);
 			cached_prize_comp_imgs.resize(len);
 			for (uint i = 0; i < len; i++) {
-				string txt = (i + 1) + ": ₹" + prizes[i];
+				string txt = (i + 1) + ": " + prizes[i];
 				@cached_prize_imgs[i] = g_window.renderer.create_texture(font_obj.render_text_blended(txt, current_theme.text.r, current_theme.text.g, current_theme.text.b));
 				@cached_prize_hl_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(txt, current_theme.highlight_text.r, current_theme.highlight_text.g, current_theme.highlight_text.b));
 				@cached_prize_ms_imgs[i] = g_window.renderer.create_texture(font_bold_obj.render_text_blended(txt, current_theme.milestone.r, current_theme.milestone.g, current_theme.milestone.b));

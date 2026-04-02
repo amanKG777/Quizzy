@@ -76,7 +76,7 @@ class PlayQuestionScene {
 			string status = "";
 			if (int(i) < question_index) status = status_completed;
 			else if (int(i) == question_index) status = status_current;
-			f.add_list_item(progress_list, q_num_prefix + (i + 1) + status + " for ₹" + prizes[i]);
+			f.add_list_item(progress_list, q_num_prefix + (i + 1) + status + " for " + prizes[i]);
 		}
 		f.set_list_position(progress_list, question_index);
 		for (uint i = 0; i < q.options.length(); i++) {
@@ -190,7 +190,7 @@ class PlayQuestionScene {
 			string marker = "";
 			if (j == 4 || j == 9 || j == 15) marker = milestone_text;
 			if (j == question_index) marker = current_text;
-			ladder += q_text + (j + 1) + ": ₹" + prizes[j] + marker + ". ";
+			ladder += q_text + (j + 1) + ": " + prizes[j] + marker + ". ";
 		}
 		speak(ladder, false);
 	}
@@ -204,11 +204,11 @@ class PlayQuestionScene {
 		string current_prize = (question_index > 0) ? prizes[question_index - 1] : "0";
 		string status;
 		if (state.current_lang == "fr") {
-			status = "Prix actuel : ₹" + current_prize + ". Questions restantes : " + (questions.length() - question_index) + ". Atouts restants : " + lifelines_left + ".";
+			status = "Prix actuel : " + current_prize + ". Questions restantes : " + (questions.length() - question_index) + ". Atouts restants : " + lifelines_left + ".";
 		} else if (state.current_lang == "hi") {
-			status = "वर्तमान इनाम: ₹" + current_prize + ". शेष प्रश्न: " + (questions.length() - question_index) + ". बची हुई लाइफलाइन: " + lifelines_left + ".";
+			status = "वर्तमान इनाम: " + current_prize + ". शेष प्रश्न: " + (questions.length() - question_index) + ". बची हुई लाइफलाइन: " + lifelines_left + ".";
 		} else {
-			status = "Current Prize: ₹" + current_prize + ". Questions remaining: " + (questions.length() - question_index) + ". Lifelines left: " + lifelines_left + ".";
+			status = "Current Prize: " + current_prize + ". Questions remaining: " + (questions.length() - question_index) + ". Lifelines left: " + lifelines_left + ".";
 		}
 		speak(status, false);
 	}

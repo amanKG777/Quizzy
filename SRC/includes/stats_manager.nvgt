@@ -63,8 +63,8 @@ class stats_manager {
 		f.create_window("Statistics", false, true, va.listening);
 		string stats_text = "GENERAL STATISTICS\n" +
 			"Total Games Played: " + total_games_played + "\n" +
-			"Total Earnings: ₹" + format_currency(total_earnings) + "\n" +
-			"Highest Single Prize: ₹" + format_currency(highest_prize) + "\n" +
+			"Total Earnings: " + format_currency(total_earnings) + "\n" +
+			"Highest Single Prize: " + format_currency(highest_prize) + "\n" +
 			"Total Correct Answers: " + total_correct_answers + "\n" +
 			"Total Lifelines Used: " + lifelines_used + "\n\n" +
 			"BLITZ MODE STATISTICS\n" +
@@ -120,15 +120,21 @@ class stats_manager {
 	}
 	string format_currency(int64 amount) {
 		string s = "" + amount;
-		if (s.length() <= 3) return s;
-		string res = s.substr(s.length() - 3);
-		s = s.substr(0, s.length() - 3);
-		while (s.length() > 2) {
-			res = s.substr(s.length() - 2) + "," + res;
-			s = s.substr(0, s.length() - 2);
+		string res = "";
+		if (s.length() <= 3) res = s;
+		else {
+			res = s.substr(s.length() - 3);
+			s = s.substr(0, s.length() - 3);
+			while (s.length() > 2) {
+				res = s.substr(s.length() - 2) + "," + res;
+				s = s.substr(0, s.length() - 2);
+			}
+			if (s.length() > 0) res = s + "," + res;
 		}
-		if (s.length() > 0) res = s + "," + res;
-		return res;
+		string unit = " Rupees";
+		if (app.currency == "USD") unit = " Dollars";
+		else if (app.currency == "GBP") unit = " Pounds";
+		return res + unit;
 	}
 }
 
