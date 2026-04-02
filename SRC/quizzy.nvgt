@@ -222,8 +222,7 @@ string select_language() {
 			if (v_cmd_choice != "") menu_selected = true;
 			if (menu_selected) {
 				lang = (v_cmd_choice != "") ? v_cmd_choice : m.selected_item_id;
-				if (lang == "") continue;
-				if (lang == "back") return "back";
+				if (lang == "" || lang == "back") return "back";
 				return lang;
 			}
 			gm.prepare_frame();
@@ -342,6 +341,11 @@ void settings_menu() {
 	string update_on_startup_setting = app.config.read_string("update_on_startup", "true");
 	string locking_setting = app.config.read_string("option_locking_sound_enabled", "true");
 	string next_setting = app.config.read_string("manual_next_question", "false");
+	string slot1_setting = app.config.read_string("lifeline_slot_1", "5050");
+	string slot2_setting = app.config.read_string("lifeline_slot_2", "phone");
+	string slot3_setting = app.config.read_string("lifeline_slot_3", "audience");
+	string slot4_setting = app.config.read_string("lifeline_slot_4", "double");
+	string slot5_setting = app.config.read_string("lifeline_slot_5", "expert");
 	audio_form f;
 	f.create_window("Settings", false, true, va.listening);
 	int chk_startup = f.create_checkbox("Enable Startup Intro", startup_setting == "true");
@@ -354,6 +358,36 @@ void settings_menu() {
 	int chk_anticipation = f.create_checkbox("Enable Heartbeat", anticipation_setting == "true");
 	int chk_locking = f.create_checkbox("Enable option locking sound", locking_setting == "true");
 	int chk_next = f.create_checkbox("Press Enter to go to next question", next_setting == "true");
+	
+	string[] lifeline_options = {"50-50", "Phone a Friend", "Ask the Audience", "Double Dip", "Ask an Expert", "None"};
+	string[] lifeline_values = {"5050", "phone", "audience", "double", "expert", "none"};
+	
+	int list_slot1 = f.create_list("Lifeline Slot 1 (Key 1)");
+	for (uint i = 0; i < lifeline_options.length(); i++) {
+		f.add_list_item(list_slot1, lifeline_options[i]);
+		if (lifeline_values[i] == slot1_setting) f.set_list_position(list_slot1, i);
+	}
+	int list_slot2 = f.create_list("Lifeline Slot 2 (Key 2)");
+	for (uint i = 0; i < lifeline_options.length(); i++) {
+		f.add_list_item(list_slot2, lifeline_options[i]);
+		if (lifeline_values[i] == slot2_setting) f.set_list_position(list_slot2, i);
+	}
+	int list_slot3 = f.create_list("Lifeline Slot 3 (Key 3)");
+	for (uint i = 0; i < lifeline_options.length(); i++) {
+		f.add_list_item(list_slot3, lifeline_options[i]);
+		if (lifeline_values[i] == slot3_setting) f.set_list_position(list_slot3, i);
+	}
+	int list_slot4 = f.create_list("Lifeline Slot 4 (Key 4)");
+	for (uint i = 0; i < lifeline_options.length(); i++) {
+		f.add_list_item(list_slot4, lifeline_options[i]);
+		if (lifeline_values[i] == slot4_setting) f.set_list_position(list_slot4, i);
+	}
+	int list_slot5 = f.create_list("Lifeline Slot 5 (Key 5)");
+	for (uint i = 0; i < lifeline_options.length(); i++) {
+		f.add_list_item(list_slot5, lifeline_options[i]);
+		if (lifeline_values[i] == slot5_setting) f.set_list_position(list_slot5, i);
+	}
+	
 	int list_source = f.create_list("Question Source");
 	string[] sources = {"OpenTDB", "TriviaAPI", "Random"};
 	string[] source_labels = {"Open Trivia DB", "The Trivia API", "Random (Mixed)"};
@@ -410,6 +444,18 @@ void settings_menu() {
 			app.config.write_string("option_locking_sound_enabled", app.option_locking_sound_enabled ? "true" : "false");
 			app.manual_next_question = f.is_checked(chk_next);
 			app.config.write_string("manual_next_question", app.manual_next_question ? "true" : "false");
+			
+			int s1_pos = f.get_list_position(list_slot1);
+			if (s1_pos >= 0) app.config.write_string("lifeline_slot_1", lifeline_values[s1_pos]);
+			int s2_pos = f.get_list_position(list_slot2);
+			if (s2_pos >= 0) app.config.write_string("lifeline_slot_2", lifeline_values[s2_pos]);
+			int s3_pos = f.get_list_position(list_slot3);
+			if (s3_pos >= 0) app.config.write_string("lifeline_slot_3", lifeline_values[s3_pos]);
+			int s4_pos = f.get_list_position(list_slot4);
+			if (s4_pos >= 0) app.config.write_string("lifeline_slot_4", lifeline_values[s4_pos]);
+			int s5_pos = f.get_list_position(list_slot5);
+			if (s5_pos >= 0) app.config.write_string("lifeline_slot_5", lifeline_values[s5_pos]);
+
 			int source_pos = f.get_list_position(list_source);
 			if (source_pos >= 0) {
 				app.config.write_string("question_source", sources[source_pos]);
@@ -844,6 +890,13 @@ void safe_stop(sound@ s) {
 }
 
 bool handle_option_selection(QuizSession@ session, int i, int[]& option_buttons, int& current_selection) {
+	if (session.is_option_removed(i)) {
+		string msg = "This option has been removed.";
+		if (state.current_lang == "fr") msg = "Cette option a été supprimée.";
+		else if (state.current_lang == "hi") msg = "यह विकल्प हटा दिया गया है।";
+		alert("Quizzy", msg);
+		return false;
+	}
 	play_sfx("click.mp3");
 	if (ask_yes_no("Quizzy", "Is this your final answer?") != 1) {
 		return false; 
@@ -1132,6 +1185,11 @@ void show_audience_poll(Question@ q) {
 		}
 	}
 	string result_text = "";
+	string speak_text = "";
+	if (state.current_lang == "hi") speak_text = "दर्शकों के मतदान के परिणाम इस प्रकार हैं: ";
+	else if (state.current_lang == "fr") speak_text = "Voici les résultats du vote du public : ";
+	else speak_text = "The audience poll results are: ";
+	
 	for (uint i = 0; i < q.options.length(); i++) {
 		string prefix = "";
 		if (i == 0) prefix = "a";
@@ -1139,7 +1197,19 @@ void show_audience_poll(Question@ q) {
 		else if (i == 2) prefix = "c";
 		else if (i == 3) prefix = "d";
 		result_text += "Option " + prefix + " (" + q.options[i] + "): " + votes[i] + "%\r\n";
+		
+		string speak_prefix = "Option " + prefix.upper();
+		if (state.current_lang == "hi") speak_prefix = "विकल्प " + prefix.upper();
+		else if (state.current_lang == "fr") speak_prefix = "Option " + prefix.upper();
+		
+		speak_text += speak_prefix + ": " + votes[i] + " percent. ";
 	}
+	
+	if (va.listening) {
+		speak(speak_text, false);
+		return;
+	}
+	
 	audio_form f;
 	f.create_window("Quizzy", false);
 	int poll_box = f.create_input_box("Poll Results", result_text, "", 0, true, true);

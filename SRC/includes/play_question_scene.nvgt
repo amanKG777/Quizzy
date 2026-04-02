@@ -14,6 +14,7 @@ class PlayQuestionScene {
 	int quit_btn = -1;
 	int q_field = -1;
 	int last_focus = -1;
+	string last_lifeline_result = "";
 	void init(Question@ q, int question_index) {
 		app.current_state = STATE_IN_GAME;
 		@app.last_question = @q;
@@ -21,6 +22,7 @@ class PlayQuestionScene {
 		exit_game_flag = false;
 		@this.q = q;
 		this.question_index = question_index;
+		last_lifeline_result = "";
 		session.start_question(q, question_index);
 		safe_stop(app.bg_music);
 		if (question_index < 10) {
@@ -101,6 +103,11 @@ class PlayQuestionScene {
 		app.input.register_local(KEY_D, KeyEventHandler(this.on_key_D));
 		app.input.register_local(KEY_L, KeyEventHandler(this.on_key_L));
 		app.input.register_local(KEY_S, KeyEventHandler(this.on_key_S));
+		app.input.register_local(KEY_1, KeyEventHandler(this.on_key_1));
+		app.input.register_local(KEY_2, KeyEventHandler(this.on_key_2));
+		app.input.register_local(KEY_3, KeyEventHandler(this.on_key_3));
+		app.input.register_local(KEY_4, KeyEventHandler(this.on_key_4));
+		app.input.register_local(KEY_5, KeyEventHandler(this.on_key_5));
 		app.input.register_local(KEY_F5, KeyEventHandler(this.on_key_F5));
 		app.input.register_local(KEY_F1, run_voice_assist_mode);
 		va.clear_commands();
@@ -109,6 +116,7 @@ class PlayQuestionScene {
 		va.add_command("option c"); va.add_command("charlie"); va.add_command("cat"); va.add_command("c");
 		va.add_command("option d"); va.add_command("delta"); va.add_command("dog"); va.add_command("d");
 		va.add_command("status");
+		va.add_command("repeat");
 		va.add_command("exit");
 		if (state.lifeline_5050) va.add_command("use 50 50");
 		if (state.lifeline_phone) va.add_command("phone a friend");
@@ -211,6 +219,155 @@ class PlayQuestionScene {
 		else f.focus(q_field); 
 		}
 	}
+	void on_key_1() { activate_lifeline_by_slot(1); }
+	void on_key_2() { activate_lifeline_by_slot(2); }
+	void on_key_3() { activate_lifeline_by_slot(3); }
+	void on_key_4() { activate_lifeline_by_slot(4); }
+	void on_key_5() { activate_lifeline_by_slot(5); }
+	
+	void activate_lifeline_by_slot(int slot) {
+		string lifeline = app.config.read_string("lifeline_slot_" + slot, "none");
+		if (lifeline == "5050") {
+			if (btn_5050 != -1 && state.lifeline_5050) activate_5050();
+		} else if (lifeline == "phone") {
+			if (btn_phone != -1 && state.lifeline_phone) activate_phone();
+		} else if (lifeline == "audience") {
+			if (btn_audience != -1 && state.lifeline_audience) activate_audience();
+		} else if (lifeline == "double") {
+			if (btn_double != -1 && state.lifeline_double_dip) activate_double();
+		} else if (lifeline == "expert") {
+			if (btn_expert != -1 && state.lifeline_expert) activate_expert();
+		}
+	}
+
+	void activate_5050() {
+		session.pause_timer();
+		safe_stop(app.bg_music);
+		int[] removed = session.use_5050();
+		f.set_state(btn_5050, false, false);
+		for (uint i = 0; i < removed.length(); i++) {
+			f.set_state(option_buttons[removed[i]], false, false);
+		}
+		string title = "50-50";
+		string msg = "Two incorrect options have been removed.";
+		if (state.current_lang == "fr") {
+			msg = "Deux options incorrectes ont été supprimées.";
+		} else if (state.current_lang == "hi") {
+			msg = "दो गलत विकल्प हटा दिए गए हैं।";
+		}
+		last_lifeline_result = msg;
+		if (va.listening) {
+			speak(msg, false);
+			wait(4000); 
+			app.bg_music.play_looped();
+			session.resume_timer();
+		} else {
+			alert(title, msg);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		}
+	}
+
+	void activate_phone() {
+		string answer = session.use_phone_a_friend();
+		f.set_state(btn_phone, false, false);
+		safe_stop(app.bg_music);
+		session.pause_timer();
+		play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
+		string title = "Phone a Friend";
+		string msg = "Your friend thinks the answer is: " + answer;
+		if (state.current_lang == "fr") {
+			title = "Appel à un ami";
+			msg = "Votre ami pense que la réponse est : " + answer;
+		} else if (state.current_lang == "hi") {
+			title = "फोन-अ-फ्रेंड";
+			msg = "आपके दोस्त को लगता है कि जवाब है: " + answer;
+		}
+		last_lifeline_result = msg;
+		if (va.listening) {
+			speak(msg, false);
+			wait(4000);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		} else {
+			alert(title, msg);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		}
+	}
+
+	void activate_audience() {
+		session.use_ask_the_audience();
+		f.set_state(btn_audience, false, false);
+		safe_stop(app.bg_music);
+		session.pause_timer();
+		play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
+		if (va.listening) {
+			show_audience_poll(q);
+			wait(8000); 
+			app.bg_music.play_looped();
+			session.resume_timer();
+		} else {
+			show_audience_poll(q);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		}
+	}
+
+	void activate_double() {
+		session.pause_timer();
+		safe_stop(app.bg_music);
+		session.use_double_dip();
+		f.set_state(btn_double, false, false);
+		string title = "Double Dip";
+		string msg = "Double Dip active! You can now make two guesses for this question.";
+		if (state.current_lang == "fr") {
+			title = "Double vote";
+			msg = "Double vote activé ! Vous pouvez maintenant faire deux tentatives pour cette question.";
+		} else if (state.current_lang == "hi") {
+			title = "डबल डिप";
+			msg = "डबल डिप सक्रिय! अब आप इस प्रश्न के लिए दो अनुमान लगा सकते हैं।";
+		}
+		last_lifeline_result = msg;
+		if (va.listening) {
+			speak(msg, false);
+			wait(4000);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		} else {
+			alert(title, msg);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		}
+	}
+
+	void activate_expert() {
+		session.pause_timer();
+		safe_stop(app.bg_music);
+		string answer = session.use_ask_an_expert();
+		f.set_state(btn_expert, false, false);
+		string title = "Ask an Expert";
+		string msg = "The expert says the correct answer is definitely: " + answer;
+		if (state.current_lang == "fr") {
+			title = "Avis d'un expert";
+			msg = "L'expert dit que la bonne réponse est certainement : " + answer;
+		} else if (state.current_lang == "hi") {
+			title = "आस्क एन एक्सपर्ट";
+			msg = "विशेषज्ञ का कहना है कि सही उत्तर निश्चित रूप से है: " + answer;
+		}
+		last_lifeline_result = msg;
+		if (va.listening) {
+			speak(msg, false);
+			wait(4000);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		} else {
+			alert(title, msg);
+			app.bg_music.play_looped();
+			session.resume_timer();
+		}
+	}
+
 	bool run() {
 		loop_result = -1;
 		while (true) {
@@ -259,6 +416,12 @@ class PlayQuestionScene {
 			}
 			if (v_cmd == "status") {
 				on_key_S();
+			} else if (v_cmd == "repeat") {
+				if (last_lifeline_result != "") {
+					speak(last_lifeline_result, true);
+				} else {
+					speak(get_voice_hint(), true);
+				}
 			} else if (v_cmd == "exit") {
 				play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);
 				safe_stop(app.bg_music);
@@ -288,76 +451,19 @@ class PlayQuestionScene {
 			}
 			if (loop_result != -1) break;
 			if (btn_5050 != -1 && (f.is_pressed(btn_5050) || v_cmd == "use 50 50")) {
-				int[] removed = session.use_5050();
-				f.set_state(btn_5050, false, false);
-				for (uint i = 0; i < removed.length(); i++) {
-					f.set_state(option_buttons[removed[i]], false, false);
-				}
-				string title = "50-50";
-				string msg = "Two incorrect options have been removed.";
-				if (state.current_lang == "fr") {
-					msg = "Deux options incorrectes ont été supprimées.";
-				} else if (state.current_lang == "hi") {
-					msg = "दो गलत विकल्प हटा दिए गए हैं।";
-				}
-				alert(title, msg);
+				activate_5050();
 			}
 			if (btn_phone != -1 && (f.is_pressed(btn_phone) || v_cmd == "phone a friend")) {
-				string answer = session.use_phone_a_friend();
-				f.set_state(btn_phone, false, false);
-				safe_stop(app.bg_music);
-				session.pause_timer();
-				play_sfx("PhoneFriend_10-02-26_16-19-22-264 .mp3", true); 
-				string title = "Phone a Friend";
-				string msg = "Your friend thinks the answer is: " + answer;
-				if (state.current_lang == "fr") {
-					title = "Appel à un ami";
-					msg = "Votre ami pense que la réponse est : " + answer;
-				} else if (state.current_lang == "hi") {
-					title = "फोन-अ-फ्रेंड";
-					msg = "आपके दोस्त को लगता है कि जवाब है: " + answer;
-				}
-				alert(title, msg);
-				app.bg_music.play_looped();
-				session.resume_timer();
+				activate_phone();
 			}
 			if (btn_audience != -1 && (f.is_pressed(btn_audience) || v_cmd == "ask the audience")) {
-				session.use_ask_the_audience();
-				f.set_state(btn_audience, false, false);
-				safe_stop(app.bg_music);
-				session.pause_timer();
-				play_sfx("AskTheAudence_10-02-26_16-02-28-118 .mp3", true);
-				show_audience_poll(q);
-				app.bg_music.play_looped();
-				session.resume_timer();
+				activate_audience();
 			}
 			if (btn_double != -1 && (f.is_pressed(btn_double) || v_cmd == "double dip")) {
-				session.use_double_dip();
-				f.set_state(btn_double, false, false);
-				string title = "Double Dip";
-				string msg = "Double Dip active! You can now make two guesses for this question.";
-				if (state.current_lang == "fr") {
-					title = "Double vote";
-					msg = "Double vote activé ! Vous pouvez maintenant faire deux tentatives pour cette question.";
-				} else if (state.current_lang == "hi") {
-					title = "डबल डिप";
-					msg = "डबल डिप सक्रिय! अब आप इस प्रश्न के लिए दो अनुमान लगा सकते हैं।";
-				}
-				alert(title, msg);
+				activate_double();
 			}
 			if (btn_expert != -1 && (f.is_pressed(btn_expert) || v_cmd == "ask an expert")) {
-				string answer = session.use_ask_an_expert();
-				f.set_state(btn_expert, false, false);
-				string title = "Ask an Expert";
-				string msg = "The expert says the correct answer is definitely: " + answer;
-				if (state.current_lang == "fr") {
-					title = "Avis d'un expert";
-					msg = "L'expert dit que la bonne réponse est certainement : " + answer;
-				} else if (state.current_lang == "hi") {
-					title = "आस्क एन एक्सपर्ट";
-					msg = "विशेषज्ञ का कहना है कि सही उत्तर निश्चित रूप से है: " + answer;
-				}
-				alert(title, msg);
+				activate_expert();
 			}
 			if (f.is_pressed(quit_btn)) {
 				play_sfx("gameQuit_10-02-26_16-16-54-380.mp3", true);

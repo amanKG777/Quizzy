@@ -6,6 +6,7 @@ class QuizSession {
 	int question_index;
 	bool double_dip_active;
 	timer question_timer;
+	int[] removed_options;
 	QuizSession() {
 		double_dip_active = false;
 	}
@@ -14,6 +15,11 @@ class QuizSession {
 		question_index = index;
 		double_dip_active = false;
 		question_timer.restart();
+		removed_options.resize(0);
+	}
+	
+	bool is_option_removed(int index) {
+		return removed_options.find(index) >= 0;
 	}
 	int get_time_limit() {
 		if (question_index < 5) return 30000;
@@ -39,15 +45,14 @@ class QuizSession {
 	int[] use_5050() {
 		state.lifeline_5050 = false;
 		state.lifelines_used_count++;
-		int[] removed_options;
 		int removed = 0;
 		for (uint i = 0; i < current_question.options.length() && removed < 2; i++) {
 			if (int(i) != current_question.correct_index) {
-				removed_options.insert_last(i);
+				this.removed_options.insert_last(i);
 				removed++;
 			}
 		}
-		return removed_options;
+		return this.removed_options;
 	}
 	string use_phone_a_friend() {
 		state.lifeline_phone = false;
