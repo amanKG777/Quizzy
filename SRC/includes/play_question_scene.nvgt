@@ -224,7 +224,6 @@ class PlayQuestionScene {
 	void on_key_3() { activate_lifeline_by_slot(3); }
 	void on_key_4() { activate_lifeline_by_slot(4); }
 	void on_key_5() { activate_lifeline_by_slot(5); }
-	
 	void activate_lifeline_by_slot(int slot) {
 		string lifeline = app.config.read_string("lifeline_slot_" + slot, "none");
 		if (lifeline == "5050") {
@@ -239,7 +238,6 @@ class PlayQuestionScene {
 			if (btn_expert != -1 && state.lifeline_expert) activate_expert();
 		}
 	}
-
 	void activate_5050() {
 		session.pause_timer();
 		safe_stop(app.bg_music);
@@ -267,7 +265,6 @@ class PlayQuestionScene {
 			session.resume_timer();
 		}
 	}
-
 	void activate_phone() {
 		string answer = session.use_phone_a_friend();
 		f.set_state(btn_phone, false, false);
@@ -295,7 +292,6 @@ class PlayQuestionScene {
 			session.resume_timer();
 		}
 	}
-
 	void activate_audience() {
 		session.use_ask_the_audience();
 		f.set_state(btn_audience, false, false);
@@ -313,7 +309,6 @@ class PlayQuestionScene {
 			session.resume_timer();
 		}
 	}
-
 	void activate_double() {
 		session.pause_timer();
 		safe_stop(app.bg_music);
@@ -340,7 +335,6 @@ class PlayQuestionScene {
 			session.resume_timer();
 		}
 	}
-
 	void activate_expert() {
 		session.pause_timer();
 		safe_stop(app.bg_music);
@@ -367,7 +361,6 @@ class PlayQuestionScene {
 			session.resume_timer();
 		}
 	}
-
 	bool run() {
 		loop_result = -1;
 		while (true) {

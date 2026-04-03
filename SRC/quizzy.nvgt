@@ -73,7 +73,6 @@ void update_prizes() {
 		prizes = {"100" + unit, "200" + unit, "300" + unit, "500" + unit, "1,000" + unit, "2,000" + unit, "4,000" + unit, "8,000" + unit, "16,000" + unit, "32,000" + unit, "64,000" + unit, "125,000" + unit, "250,000" + unit, "500,000" + unit, "750,000" + unit, "1,000,000" + unit};
 		prize_values = {100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 750000, 1000000};
 	} else {
-		// Default to INR
 		prizes = {"1,000 Rupees", "2,000 Rupees", "3,000 Rupees", "5,000 Rupees", "10,000 Rupees", "20,000 Rupees", "40,000 Rupees", "80,000 Rupees", "1.6 Lakh Rupees", "3.2 Lakh Rupees", "6.4 Lakh Rupees", "12.5 Lakh Rupees", "25 Lakh Rupees", "50 Lakh Rupees", "1 Crore Rupees", "7 Crore Rupees"};
 		prize_values = {1000, 2000, 3000, 5000, 10000, 20000, 40000, 80000, 160000, 320000, 640000, 1250000, 2500000, 5000000, 10000000, 70000000};
 	}
@@ -377,10 +376,8 @@ void settings_menu() {
 	int chk_anticipation = f.create_checkbox("Enable Heartbeat", anticipation_setting == "true");
 	int chk_locking = f.create_checkbox("Enable option locking sound", locking_setting == "true");
 	int chk_next = f.create_checkbox("Press Enter to go to next question", next_setting == "true");
-	
 	string[] lifeline_options = {"50-50", "Phone a Friend", "Ask the Audience", "Double Dip", "Ask an Expert", "None"};
 	string[] lifeline_values = {"5050", "phone", "audience", "double", "expert", "none"};
-	
 	int list_slot1 = f.create_list("Lifeline Slot 1 (Key 1)");
 	for (uint i = 0; i < lifeline_options.length(); i++) {
 		f.add_list_item(list_slot1, lifeline_options[i]);
@@ -406,7 +403,6 @@ void settings_menu() {
 		f.add_list_item(list_slot5, lifeline_options[i]);
 		if (lifeline_values[i] == slot5_setting) f.set_list_position(list_slot5, i);
 	}
-	
 	int list_currency = f.create_list("Currency");
 	string[] currencies = {"INR", "USD", "GBP"};
 	string[] currency_labels = {"Indian Rupees", "US Dollars", "British Pounds"};
@@ -414,7 +410,6 @@ void settings_menu() {
 		f.add_list_item(list_currency, currency_labels[i]);
 		if (currencies[i] == currency_setting) f.set_list_position(list_currency, i);
 	}
-	
 	int list_source = f.create_list("Question Source");
 	string[] sources = {"OpenTDB", "TriviaAPI", "Random"};
 	string[] source_labels = {"Open Trivia DB", "The Trivia API", "Random (Mixed)"};
@@ -471,7 +466,6 @@ void settings_menu() {
 			app.config.write_string("option_locking_sound_enabled", app.option_locking_sound_enabled ? "true" : "false");
 			app.manual_next_question = f.is_checked(chk_next);
 			app.config.write_string("manual_next_question", app.manual_next_question ? "true" : "false");
-			
 			int s1_pos = f.get_list_position(list_slot1);
 			if (s1_pos >= 0) app.config.write_string("lifeline_slot_1", lifeline_values[s1_pos]);
 			int s2_pos = f.get_list_position(list_slot2);
@@ -482,14 +476,12 @@ void settings_menu() {
 			if (s4_pos >= 0) app.config.write_string("lifeline_slot_4", lifeline_values[s4_pos]);
 			int s5_pos = f.get_list_position(list_slot5);
 			if (s5_pos >= 0) app.config.write_string("lifeline_slot_5", lifeline_values[s5_pos]);
-
 			int cur_pos = f.get_list_position(list_currency);
 			if (cur_pos >= 0) {
 				app.currency = currencies[cur_pos];
 				app.config.write_string("currency", app.currency);
 				update_prizes();
 			}
-
 			int source_pos = f.get_list_position(list_source);
 			if (source_pos >= 0) {
 				app.config.write_string("question_source", sources[source_pos]);
@@ -838,7 +830,6 @@ string format_currency(int amount) {
 		}
 		if (s.length() > 0) res = s + "," + res;
 	}
-	
 	string unit = " Rupees";
 	if (app.currency == "USD") unit = " Dollars";
 	else if (app.currency == "GBP") unit = " Pounds";
@@ -1233,7 +1224,6 @@ void show_audience_poll(Question@ q) {
 	if (state.current_lang == "hi") speak_text = "दर्शकों के मतदान के परिणाम इस प्रकार हैं: ";
 	else if (state.current_lang == "fr") speak_text = "Voici les résultats du vote du public : ";
 	else speak_text = "The audience poll results are: ";
-	
 	for (uint i = 0; i < q.options.length(); i++) {
 		string prefix = "";
 		if (i == 0) prefix = "a";
@@ -1241,19 +1231,15 @@ void show_audience_poll(Question@ q) {
 		else if (i == 2) prefix = "c";
 		else if (i == 3) prefix = "d";
 		result_text += "Option " + prefix + " (" + q.options[i] + "): " + votes[i] + "%\r\n";
-		
 		string speak_prefix = "Option " + prefix.upper();
 		if (state.current_lang == "hi") speak_prefix = "विकल्प " + prefix.upper();
 		else if (state.current_lang == "fr") speak_prefix = "Option " + prefix.upper();
-		
 		speak_text += speak_prefix + ": " + votes[i] + " percent. ";
 	}
-	
 	if (va.listening) {
 		speak(speak_text, false);
 		return;
 	}
-	
 	audio_form f;
 	f.create_window("Quizzy", false);
 	int poll_box = f.create_input_box("Poll Results", result_text, "", 0, true, true);

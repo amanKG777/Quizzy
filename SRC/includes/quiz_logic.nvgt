@@ -17,7 +17,6 @@ class QuizSession {
 		question_timer.restart();
 		removed_options.resize(0);
 	}
-	
 	bool is_option_removed(int index) {
 		return removed_options.find(index) >= 0;
 	}
