@@ -1,7 +1,7 @@
 ; Inno Setup Script for Quizzy
 #define AppName "Quizzy"
 #ifndef AppVersion
-  #define AppVersion "1.2.1"
+  #define AppVersion "1.3.0"
 #endif
 #define AppPublisher "Boostof Studios"
 #define AppURL "https://github.com/amanKG777/Quizzy"

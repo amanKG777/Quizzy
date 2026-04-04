@@ -13,7 +13,7 @@
 #include "settings.nvgt"
 #include "includes/voice_assist.nvgt"
 
-const string GAME_VERSION = "1.2.1";
+const string GAME_VERSION = "1.3.0";
 const string GITHUB_REPO_OWNER = "amanKG777";
 const string GITHUB_REPO_NAME = "Quizzy";
 updater game_updater(GAME_VERSION, GITHUB_REPO_OWNER, GITHUB_REPO_NAME);
