@@ -584,11 +584,112 @@ void manage_custom_packs_menu() {
 	}
 }
 
+string get_fn_without_ext(string path) {
+	string filename = path;
+	int last_slash = path.find_last("/");
+	int last_backslash = path.find_last("\\");
+	int slash = (last_slash > last_backslash) ? last_slash : last_backslash;
+	if (slash != -1) filename = path.substr(slash + 1);
+	
+	int dot = filename.find_last(".");
+	if (dot != -1) return filename.substr(0, dot);
+	return filename;
+}
+
+string get_fn_name(string path) {
+	int last_slash = path.find_last("/");
+	int last_backslash = path.find_last("\\");
+	int slash = (last_slash > last_backslash) ? last_slash : last_backslash;
+	if (slash != -1) return path.substr(slash + 1);
+	return path;
+}
+
+void translate_custom_pack(string filename) {
+	string[] languages = {"hi", "fr", "es", "de", "it", "ja", "ru", "zh-CN"};
+	string[] language_names = {"Hindi", "French", "Spanish", "German", "Italian", "Japanese", "Russian", "Chinese (Simplified)"};
+	
+	menu m;
+	createDefaultMenu(m);
+	for (uint i = 0; i < language_names.length(); i++) {
+		m.add_item(language_names[i], languages[i]);
+	}
+	m.add_item("Back", "back");
+	m.intro_text = "Select target language for translation:";
+	
+	string target_lang = "";
+	while (true) {
+		wait(0);
+		if (!m.monitor()) {
+			target_lang = m.selected_item_id;
+			break;
+		}
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+	}
+	
+	if (target_lang == "back" || target_lang == "") return;
+	
+	if (!load_custom_questions(filename)) return;
+	
+	@app.pw = progress_window("Quizzy", "Translating questions...");
+	for (uint i = 0; i < questions.length(); i++) {
+		app.pw.update(int((float(i) / float(questions.length())) * 100), "Translating question " + (i + 1) + " of " + questions.length() + "...");
+		string[] to_translate;
+		to_translate.insert_last(questions[i].question);
+		for (uint j = 0; j < questions[i].options.length(); j++) {
+			to_translate.insert_last(questions[i].options[j]);
+		}
+		
+		string[] translated = translate_bundle(to_translate, target_lang);
+		if (translated.length() >= to_translate.length()) {
+			questions[i].question = translated[0];
+			for (uint j = 0; j < questions[i].options.length(); j++) {
+				questions[i].options[j] = translated[j + 1];
+			}
+		}
+	}
+	@app.pw = null;
+	
+	menu post_m;
+	createDefaultMenu(post_m);
+	post_m.add_item("Yes, play", "play");
+	post_m.add_item("Yes, play and save", "play_save");
+	post_m.add_item("No", "no");
+	post_m.intro_text = "Translation complete. Would you like to play and save this TRANSLATED version as a separate JSON file?";
+	
+	string final_choice = "";
+	while (true) {
+		wait(0);
+		if (!post_m.monitor()) {
+			final_choice = post_m.selected_item_id;
+			break;
+		}
+		gm.prepare_frame();
+		gm.draw_menu(post_m);
+		gm.present_frame();
+	}
+	
+	if (final_choice == "play" || final_choice == "play_save") {
+		if (final_choice == "play_save") {
+			string base = get_fn_without_ext(filename).replace("_translated", "");
+			string new_filename = get_custom_questions_path() + base + "_" + target_lang + "_translated.json";
+			save_questions_to_cache(new_filename, questions);
+			alert("Quizzy", "Pack saved as: " + get_fn_name(new_filename));
+		}
+		state.reset();
+		state.current_lang = target_lang;
+		game_loop();
+		load_menu_music();
+	}
+}
+
 void custom_pack_actions_menu(string filename) {
 	menu m;
 	createDefaultMenu(m);
 	m.add_item("Play", "play");
 	m.add_item("Edit", "edit");
+	m.add_item("Translate", "translate");
 	m.add_item("Delete", "delete");
 	m.add_item("Back", "back");
 	m.intro_text = "Select an action for the pack: " + filename;
@@ -600,6 +701,7 @@ void custom_pack_actions_menu(string filename) {
 		if (v_cmd != "") {
 			if (v_cmd == "play") v_cmd_choice = "play";
 			else if (v_cmd == "edit") v_cmd_choice = "edit";
+			else if (v_cmd == "translate") v_cmd_choice = "translate";
 			else if (v_cmd == "delete") v_cmd_choice = "delete";
 			else if (v_cmd == "back") v_cmd_choice = "back";
 		}
@@ -621,6 +723,9 @@ void custom_pack_actions_menu(string filename) {
 				break;
 			} else if (choice == "edit") {
 				create_custom_pack_form(filename);
+				break;
+			} else if (choice == "translate") {
+				translate_custom_pack(filename);
 				break;
 			} else if (choice == "delete") {
 				if (ask_yes_no("Quizzy", "Are you sure you want to delete this pack?") == 1) {
