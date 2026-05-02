@@ -173,7 +173,8 @@ class updater {
 					string ps_script = "Start-Sleep -Seconds 1; Wait-Process -Id " + pid + " -ErrorAction SilentlyContinue; " +
 						"Start-Process -FilePath '" + download_path + "' -ArgumentList '/silent' -Wait; " +
 						"Start-Process -FilePath '" + current_exe + "'";
-					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
+					string[] args = {"powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps_script};
+					run(args, 16);
 					exit();
 				} else if (target_file_name.ends_with(".zip")) {
 					speak("Extracting update...", false);
@@ -184,7 +185,8 @@ class updater {
 						"Expand-Archive -Path '" + download_path + "' -DestinationPath $exeDir -Force; " +
 						"Remove-Item -Path '" + download_path + "' -Force; " +
 						"Start-Process -FilePath '" + current_exe + "'";
-					run("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps_script + "\"", false, true);
+					string[] args = {"powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", ps_script};
+					run(args, 16);
 					exit();
 				}
 			}
