@@ -12,6 +12,7 @@
 #include "touch.nvgt"
 #include "settings.nvgt"
 #include "includes/voice_assist.nvgt"
+#include "includes/community_packs.nvgt"
 
 const string GAME_VERSION = "1.3.0";
 const string GITHUB_REPO_OWNER = "amanKG777";
@@ -804,6 +805,7 @@ void main_menu() {
 	createDefaultMenu(m);
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
+	m.add_item("Community Store", "community");
 	m.add_item("Manage Custom Packs", "manage_custom");
 	m.add_item("Statistics", "stats");
 	m.add_item("Settings", "settings");
@@ -814,6 +816,7 @@ void main_menu() {
 	va.clear_commands();
 	va.add_command("start game");
 	va.add_command("download category for offline");
+	va.add_command("community store");
 	va.add_command("manage custom packs");
 	va.add_command("statistics");
 	va.add_command("settings");
@@ -830,6 +833,7 @@ void main_menu() {
 		if (v_cmd != "") {
 			if (v_cmd == "start game") v_cmd_choice = "start";
 			else if (v_cmd == "download category for offline") v_cmd_choice = "download";
+			else if (v_cmd == "community store") v_cmd_choice = "community";
 			else if (v_cmd == "manage custom packs") v_cmd_choice = "manage_custom";
 			else if (v_cmd == "statistics") v_cmd_choice = "stats";
 			else if (v_cmd == "settings") v_cmd_choice = "settings";
@@ -872,6 +876,9 @@ void main_menu() {
 					}
 				}
 				main_menu_reset(m);
+			} else if (choice == "community") {
+				show_community_store();
+				main_menu_reset(m);
 			} else if (choice == "manage_custom") {
 				manage_custom_packs_menu();
 				main_menu_reset(m);
@@ -899,6 +906,7 @@ void main_menu_reset(menu@ m) {
 	createDefaultMenu(m);
 	m.add_item("Start Game", "start");
 	m.add_item("Download Category for Offline", "download");
+	m.add_item("Community Store", "community");
 	m.add_item("Manage Custom Packs", "manage_custom");
 	m.add_item("Statistics", "stats");
 	m.add_item("Settings", "settings");
@@ -908,6 +916,7 @@ void main_menu_reset(menu@ m) {
 	va.clear_commands();
 	va.add_command("start game");
 	va.add_command("download category for offline");
+	va.add_command("community store");
 	va.add_command("manage custom packs");
 	va.add_command("statistics");
 	va.add_command("settings");

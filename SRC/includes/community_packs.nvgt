@@ -1,0 +1,190 @@
+#include "game_data.nvgt"
+#include "app_context.nvgt"
+#include "graphics_manager.nvgt"
+
+class CommunityPack {
+	string name;
+	string author;
+	string description;
+	string language;
+	string filename;
+	int question_count;
+	string date_added;
+
+	CommunityPack() {}
+	
+	CommunityPack(json_object@ obj) {
+		if (@obj == null) return;
+		this.name = string(obj["name"]);
+		this.author = string(obj["author"]);
+		this.description = string(obj["description"]);
+		this.language = string(obj["language"]);
+		this.filename = string(obj["filename"]);
+		this.question_count = int(obj["question_count"]);
+		this.date_added = string(obj["date_added"]);
+	}
+}
+
+const string COMMUNITY_REPO_URL = "https://raw.githubusercontent.com/amanKG777/QuizzyQuestionsPacks/main/";
+
+CommunityPack@[] fetch_community_registry() {
+	CommunityPack@[] packs;
+	string url = COMMUNITY_REPO_URL + "registry.json";
+	string response = fetch_json_with_progress(url, "Connecting to Community Store...");
+	if (response == "") return packs;
+	
+	var@ v = parse_json(response);
+	json_array@ arr = cast<json_array>(v);
+	if (@arr == null) return packs;
+	
+	for (uint i = 0; i < arr.size(); i++) {
+		json_object@ obj = arr.get_object(i);
+		packs.insert_last(CommunityPack(obj));
+	}
+	return packs;
+}
+
+void show_community_store() {
+	app.current_state = STATE_CUSTOM_PACKS; // Reusing state for now or we could add STATE_COMMUNITY_STORE
+	CommunityPack@[] packs = fetch_community_registry();
+	if (packs.length() == 0) {
+		alert("Quizzy", "No community packs found or could not connect to the server.");
+		return;
+	}
+	
+	menu m;
+	createDefaultMenu(m);
+	m.intro_text = "Community Pack Store. Select a pack to view details.";
+	for (uint i = 0; i < packs.length(); i++) {
+		m.add_item(packs[i].name + " by " + packs[i].author, "" + i);
+	}
+	m.add_item("Back", "back");
+	
+	app.input.register_local(KEY_F1, run_voice_assist_mode);
+	va.clear_commands();
+	for (uint i = 0; i < packs.length(); i++) {
+		va.add_command(packs[i].name.lower());
+	}
+	va.add_command("back");
+	va.start();
+	
+	while (true) {
+		wait(0);
+		string v_cmd = va.get_command_non_blocking();
+		string v_cmd_choice = "";
+		if (v_cmd != "") {
+			if (v_cmd == "back") v_cmd_choice = "back";
+			else {
+				for (uint i = 0; i < packs.length(); i++) {
+					if (v_cmd == packs[i].name.lower()) {
+						v_cmd_choice = "" + i;
+						break;
+					}
+				}
+			}
+		}
+		
+		bool menu_selected = false;
+		if (!va.listening) {
+			app.touch.monitor();
+			menu_selected = !m.monitor();
+		}
+		if (v_cmd_choice != "") menu_selected = true;
+		
+		if (menu_selected) {
+			string choice = (v_cmd_choice != "") ? v_cmd_choice : m.selected_item_id;
+			if (choice == "back" || choice == "") return;
+			
+			int idx = parse_int(choice);
+			show_pack_details(packs[idx]);
+			// After returning from details, we stay in the store
+			va.start(); 
+		}
+		
+		gm.prepare_frame();
+		gm.draw_menu(m);
+		gm.present_frame();
+	}
+}
+
+void show_pack_details(CommunityPack@ p) {
+	audio_form f;
+	f.create_window("Pack Details: " + p.name, false, true, va.listening);
+	
+	string details = "Pack Name: " + p.name + "\r\n" +
+	"Author: " + p.author + "\r\n" +
+	"Language: " + p.language + "\r\n" +
+	"Questions: " + p.question_count + "\r\n" +
+	"Added On: " + p.date_added + "\r\n" +
+	"Description: " + p.description;
+	
+	f.create_input_box("Pack Information", details, "", 0, true, true);
+	
+	int btn_download = f.create_button("Download Pack", true);
+	int btn_back = f.create_button("Back", false, true);
+	
+	if (va.listening) f.focus_silently(btn_download);
+	else f.focus(btn_download);
+	
+	va.clear_commands();
+	va.add_command("download pack");
+	va.add_command("download");
+	va.add_command("back");
+	va.start();
+	
+	while (true) {
+		wait(0);
+		string v_cmd = va.get_command_non_blocking();
+		if (v_cmd == "download pack" || v_cmd == "download") {
+			download_community_pack(p);
+			return;
+		} else if (v_cmd == "back") {
+			return;
+		}
+		
+		if (!va.listening) {
+			app.touch.monitor();
+			f.monitor();
+		}
+		
+		if (f.is_pressed(btn_download)) {
+			download_community_pack(p);
+			return;
+		}
+		if (f.is_pressed(btn_back)) {
+			return;
+		}
+		
+		gm.prepare_frame();
+		gm.draw_form(f);
+		gm.present_frame();
+	}
+}
+
+void download_community_pack(CommunityPack@ p) {
+	string url = COMMUNITY_REPO_URL + "packs/" + p.filename;
+	@app.pw = progress_window("Downloading", "Downloading " + p.name + "...");
+	
+	http h;
+	h.get(url);
+	while (!h.complete) {
+		wait(5);
+		app.touch.monitor();
+		app.pw.update(int(h.progress * 100));
+	}
+	
+	@app.pw = null;
+	
+	if (h.status_code == 200) {
+		string path = get_custom_questions_path();
+		if (!directory_exists(path)) directory_create(path);
+		
+		if (file_put_contents(path + p.filename, h.response_body)) {
+			alert("Quizzy", "Pack '" + p.name + "' downloaded successfully! You can find it in 'Manage Custom Packs'.");
+		} else {
+			alert("Quizzy", "Failed to save the pack to disk.");
+		}
+	} else {
+		alert("Quizzy", "Failed to download pack. Status code: " + h.status_code);
+	}
+}
