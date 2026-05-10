@@ -10,18 +10,16 @@ class CommunityPack {
 	string filename;
 	int question_count;
 	string date_added;
-
 	CommunityPack() {}
-	
 	CommunityPack(json_object@ obj) {
 		if (@obj == null) return;
-		this.name = string(obj["name"]);
-		this.author = string(obj["author"]);
-		this.description = string(obj["description"]);
-		this.language = string(obj["language"]);
-		this.filename = string(obj["filename"]);
-		this.question_count = int(obj["question_count"]);
-		this.date_added = string(obj["date_added"]);
+		this.name = obj.exists("name") ? string(obj["name"]) : "Unknown";
+		this.author = obj.exists("author") ? string(obj["author"]) : "Unknown";
+		this.description = obj.exists("description") ? string(obj["description"]) : "";
+		this.language = obj.exists("language") ? string(obj["language"]) : "en";
+		this.filename = obj.exists("filename") ? string(obj["filename"]) : "";
+		this.question_count = obj.exists("question_count") ? int(obj["question_count"]) : 0;
+		this.date_added = obj.exists("date_added") ? string(obj["date_added"]) : "";
 	}
 }
 
@@ -32,11 +30,9 @@ CommunityPack@[] fetch_community_registry() {
 	string url = COMMUNITY_REPO_URL + "registry.json";
 	string response = fetch_json_with_progress(url, "Connecting to Community Store...");
 	if (response == "") return packs;
-	
 	var@ v = parse_json(response);
 	json_array@ arr = cast<json_array>(v);
 	if (@arr == null) return packs;
-	
 	for (uint i = 0; i < arr.size(); i++) {
 		json_object@ obj = arr.get_object(i);
 		packs.insert_last(CommunityPack(obj));
@@ -45,13 +41,12 @@ CommunityPack@[] fetch_community_registry() {
 }
 
 void show_community_store() {
-	app.current_state = STATE_CUSTOM_PACKS; // Reusing state for now or we could add STATE_COMMUNITY_STORE
+	app.current_state = STATE_CUSTOM_PACKS; 
 	CommunityPack@[] packs = fetch_community_registry();
 	if (packs.length() == 0) {
 		alert("Quizzy", "No community packs found or could not connect to the server.");
 		return;
 	}
-	
 	menu m;
 	createDefaultMenu(m);
 	m.intro_text = "Community Pack Store. Select a pack to view details.";
@@ -59,7 +54,6 @@ void show_community_store() {
 		m.add_item(packs[i].name + " by " + packs[i].author, "" + i);
 	}
 	m.add_item("Back", "back");
-	
 	app.input.register_local(KEY_F1, run_voice_assist_mode);
 	va.clear_commands();
 	for (uint i = 0; i < packs.length(); i++) {
@@ -67,7 +61,6 @@ void show_community_store() {
 	}
 	va.add_command("back");
 	va.start();
-	
 	while (true) {
 		wait(0);
 		string v_cmd = va.get_command_non_blocking();
@@ -83,24 +76,19 @@ void show_community_store() {
 				}
 			}
 		}
-		
 		bool menu_selected = false;
 		if (!va.listening) {
 			app.touch.monitor();
 			menu_selected = !m.monitor();
 		}
 		if (v_cmd_choice != "") menu_selected = true;
-		
 		if (menu_selected) {
 			string choice = (v_cmd_choice != "") ? v_cmd_choice : m.selected_item_id;
 			if (choice == "back" || choice == "") return;
-			
 			int idx = parse_int(choice);
 			show_pack_details(packs[idx]);
-			// After returning from details, we stay in the store
 			va.start(); 
 		}
-		
 		gm.prepare_frame();
 		gm.draw_menu(m);
 		gm.present_frame();
@@ -110,28 +98,22 @@ void show_community_store() {
 void show_pack_details(CommunityPack@ p) {
 	audio_form f;
 	f.create_window("Pack Details: " + p.name, false, true, va.listening);
-	
 	string details = "Pack Name: " + p.name + "\r\n" +
 	"Author: " + p.author + "\r\n" +
 	"Language: " + p.language + "\r\n" +
 	"Questions: " + p.question_count + "\r\n" +
 	"Added On: " + p.date_added + "\r\n" +
 	"Description: " + p.description;
-	
 	f.create_input_box("Pack Information", details, "", 0, true, true);
-	
 	int btn_download = f.create_button("Download Pack", true);
 	int btn_back = f.create_button("Back", false, true);
-	
 	if (va.listening) f.focus_silently(btn_download);
 	else f.focus(btn_download);
-	
 	va.clear_commands();
 	va.add_command("download pack");
 	va.add_command("download");
 	va.add_command("back");
 	va.start();
-	
 	while (true) {
 		wait(0);
 		string v_cmd = va.get_command_non_blocking();
@@ -141,12 +123,10 @@ void show_pack_details(CommunityPack@ p) {
 		} else if (v_cmd == "back") {
 			return;
 		}
-		
 		if (!va.listening) {
 			app.touch.monitor();
 			f.monitor();
 		}
-		
 		if (f.is_pressed(btn_download)) {
 			download_community_pack(p);
 			return;
@@ -154,7 +134,6 @@ void show_pack_details(CommunityPack@ p) {
 		if (f.is_pressed(btn_back)) {
 			return;
 		}
-		
 		gm.prepare_frame();
 		gm.draw_form(f);
 		gm.present_frame();
@@ -164,7 +143,6 @@ void show_pack_details(CommunityPack@ p) {
 void download_community_pack(CommunityPack@ p) {
 	string url = COMMUNITY_REPO_URL + "packs/" + p.filename;
 	@app.pw = progress_window("Downloading", "Downloading " + p.name + "...");
-	
 	http h;
 	h.get(url);
 	while (!h.complete) {
@@ -172,13 +150,10 @@ void download_community_pack(CommunityPack@ p) {
 		app.touch.monitor();
 		app.pw.update(int(h.progress * 100));
 	}
-	
 	@app.pw = null;
-	
 	if (h.status_code == 200) {
 		string path = get_custom_questions_path();
 		if (!directory_exists(path)) directory_create(path);
-		
 		if (file_put_contents(path + p.filename, h.response_body)) {
 			alert("Quizzy", "Pack '" + p.name + "' downloaded successfully! You can find it in 'Manage Custom Packs'.");
 		} else {
@@ -186,5 +161,55 @@ void download_community_pack(CommunityPack@ p) {
 		}
 	} else {
 		alert("Quizzy", "Failed to download pack. Status code: " + h.status_code);
+	}
+}
+
+void upload_community_pack(string filename) {
+	string pack_content = file_get_contents(filename);
+	if (pack_content == "") {
+		alert("Quizzy", "Failed to read the pack file.");
+		return;
+	}
+	var@ v = parse_json(pack_content);
+	json_object@ root_obj = cast<json_object>(v);
+	if (@root_obj == null) {
+		alert("Quizzy", "Invalid pack format.");
+		return;
+	}
+	string pack_name = root_obj.exists("name") ? string(root_obj["name"]) : "Unnamed Pack";
+	string author = root_obj.exists("author") ? string(root_obj["author"]) : "";
+	if (author == "") {
+		author = input_box("Upload Pack", "Enter the author's name for this pack:");
+		if (author == "") return;
+		root_obj.set("author", author);
+		pack_content = root_obj.stringify(4);
+		file_put_contents(filename, pack_content);
+	}
+	string url = "http://boostofstudios.duckdns.org:8080/upload_pack";
+	@app.pw = progress_window("Uploading", "Uploading " + pack_name + " to the Community Store...");
+	http h;
+	h.post(url, pack_content);
+	while (!h.complete) {
+		wait(5);
+		app.touch.monitor();
+		if (h.progress >= 0.0) {
+			app.pw.update(int(h.progress * 100));
+		} else {
+			app.pw.update(0, "Uploading " + pack_name + "...");
+		}
+	}
+	@app.pw = null;
+	if (h.status_code == 200) {
+		var@ res_v = parse_json(h.response_body);
+		json_object@ res_obj = cast<json_object>(res_v);
+		string msg = "Your pack was uploaded successfully and is awaiting moderation!";
+		if (@res_obj != null && res_obj.exists("success")) msg = string(res_obj["success"]);
+		alert("Quizzy", msg);
+	} else {
+		string err = "Failed to upload pack. Status code: " + h.status_code;
+		var@ err_v = parse_json(h.response_body);
+		json_object@ err_obj = cast<json_object>(err_v);
+		if (@err_obj != null && err_obj.exists("error")) err += "\n" + string(err_obj["error"]);
+		alert("Quizzy", err);
 	}
 }
