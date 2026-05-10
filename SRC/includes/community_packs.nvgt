@@ -200,16 +200,24 @@ void upload_community_pack(string filename) {
 	}
 	@app.pw = null;
 	if (h.status_code == 200) {
-		var@ res_v = parse_json(h.response_body);
-		json_object@ res_obj = cast<json_object>(res_v);
 		string msg = "Your pack was uploaded successfully and is awaiting moderation!";
-		if (@res_obj != null && res_obj.exists("success")) msg = string(res_obj["success"]);
+		if (h.response_body != "") {
+			try {
+				var@ res_v = parse_json(h.response_body);
+				json_object@ res_obj = cast<json_object>(res_v);
+				if (@res_obj != null && res_obj.exists("success")) msg = string(res_obj["success"]);
+			} catch {}
+		}
 		alert("Quizzy", msg);
 	} else {
 		string err = "Failed to upload pack. Status code: " + h.status_code;
-		var@ err_v = parse_json(h.response_body);
-		json_object@ err_obj = cast<json_object>(err_v);
-		if (@err_obj != null && err_obj.exists("error")) err += "\n" + string(err_obj["error"]);
+		if (h.response_body != "") {
+			try {
+				var@ err_v = parse_json(h.response_body);
+				json_object@ err_obj = cast<json_object>(err_v);
+				if (@err_obj != null && err_obj.exists("error")) err += "\n" + string(err_obj["error"]);
+			} catch {}
+		}
 		alert("Quizzy", err);
 	}
 }
